@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="si">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>රාවණ යුද්ධය | Ravana Battle</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Sinhala:wght@400;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="screen">
+        <div class="loader-container">
+            <div class="loader"></div>
+            <h2>පූරණය වෙමින්...</h2>
+            <p>Loading...</p>
+        </div>
+    </div>
+
+    <!-- Main Menu -->
+    <div id="main-menu" class="screen hidden">
+        <div class="menu-container">
+            <div class="game-logo">
+                <h1>රාවණ යුද්ධය</h1>
+                <p class="subtitle">Ravana Battle</p>
+            </div>
+
+            <div class="menu-decoration">
+                <div class="lion-emblem">🦁</div>
+            </div>
+
+            <div class="menu-buttons">
+                <button id="btn-play" class="menu-btn primary">
+                    <span class="btn-icon">⚔️</span>
+                    <span class="btn-text">ක්‍රීඩාව ආරම්භ කරන්න</span>
+                    <span class="btn-subtitle">Start Game</span>
+                </button>
+
+                <button id="btn-levels" class="menu-btn">
+                    <span class="btn-icon">🗺️</span>
+                    <span class="btn-text">මට්ටම් තෝරන්න</span>
+                    <span class="btn-subtitle">Select Level</span>
+                </button>
+
+                <button id="btn-instructions" class="menu-btn">
+                    <span class="btn-icon">📜</span>
+                    <span class="btn-text">උපදෙස්</span>
+                    <span class="btn-subtitle">Instructions</span>
+                </button>
+
+                <button id="btn-settings" class="menu-btn">
+                    <span class="btn-icon">⚙️</span>
+                    <span class="btn-text">සැකසුම්</span>
+                    <span class="btn-subtitle">Settings</span>
+                </button>
+            </div>
+
+            <div class="footer-text">
+                <p>© 2024 | ශ්‍රී ලාංකික ක්‍රීඩා සංවර්ධනය</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Level Selection -->
+    <div id="level-select" class="screen hidden">
+        <div class="level-container">
+            <h2>මට්ටම් තෝරන්න</h2>
+            <p class="level-subtitle">Select Your Battle</p>
+
+            <div class="levels-grid">
+                <div class="level-card unlocked" data-level="1">
+                    <div class="level-number">1</div>
+                    <div class="level-info">
+                        <h3>සීගිරිය</h3>
+                        <p>Sigiriya</p>
+                        <div class="difficulty">පහසු | Easy</div>
+                    </div>
+                    <div class="level-stars">⭐⭐⭐</div>
+                </div>
+
+                <div class="level-card unlocked" data-level="2">
+                    <div class="level-number">2</div>
+                    <div class="level-info">
+                        <h3>අනුරාධපුරය</h3>
+                        <p>Anuradhapura</p>
+                        <div class="difficulty">මධ්‍යම | Medium</div>
+                    </div>
+                    <div class="level-stars">⭐⭐⭐</div>
+                </div>
+
+                <div class="level-card unlocked" data-level="3">
+                    <div class="level-number">3</div>
+                    <div class="level-info">
+                        <h3>පොළොන්නරුව</h3>
+                        <p>Polonnaruwa</p>
+                        <div class="difficulty">මධ්‍යම | Medium</div>
+                    </div>
+                    <div class="level-stars">⭐⭐⭐</div>
+                </div>
+
+                <div class="level-card unlocked" data-level="4">
+                    <div class="level-number">4</div>
+                    <div class="level-info">
+                        <h3>මහනුවර</h3>
+                        <p>Kandy</p>
+                        <div class="difficulty">අමාරු | Hard</div>
+                    </div>
+                    <div class="level-stars">⭐⭐⭐</div>
+                </div>
+
+                <div class="level-card unlocked" data-level="5">
+                    <div class="level-number">5</div>
+                    <div class="level-info">
+                        <h3>රාවණ ගුහාව</h3>
+                        <p>Ravana Cave</p>
+                        <div class="difficulty">ඉතා අමාරු | Boss</div>
+                    </div>
+                    <div class="level-stars">⭐⭐⭐</div>
+                </div>
+            </div>
+
+            <button id="btn-back-menu" class="menu-btn secondary">
+                <span class="btn-icon">🔙</span>
+                <span class="btn-text">ආපසු</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Instructions Screen -->
+    <div id="instructions" class="screen hidden">
+        <div class="instructions-container">
+            <h2>📜 උපදෙස්</h2>
+            <p class="instructions-subtitle">How to Play</p>
+
+            <div class="instructions-grid">
+                <div class="instruction-card">
+                    <div class="instruction-icon">⌨️</div>
+                    <h3>පාලනය</h3>
+                    <ul>
+                        <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> - චලනය / Move</li>
+                        <li><kbd>Mouse</kbd> - ඉලක්කය / Aim</li>
+                        <li><kbd>Click</kbd> - වෙඩි තැබීම / Shoot</li>
+                        <li><kbd>R</kbd> - නැවත පිරවීම / Reload</li>
+                        <li><kbd>Space</kbd> - විශේෂ ප්‍රහාරය / Special</li>
+                        <li><kbd>ESC</kbd> - විරාමය / Pause</li>
+                    </ul>
+                </div>
+
+                <div class="instruction-card">
+                    <div class="instruction-icon">🎯</div>
+                    <h3>අරමුණ</h3>
+                    <p>සියලුම සතුරන් පරාජය කර ලාංකික රාජධානිය ආරක්ෂා කරන්න!</p>
+                    <p class="english">Defeat all enemies and protect the Lankan Kingdom!</p>
+                </div>
+
+                <div class="instruction-card">
+                    <div class="instruction-icon">💎</div>
+                    <h3>බෝනස්</h3>
+                    <ul>
+                        <li>❤️ - ජීවය / Health</li>
+                        <li>⚡ - වේගය / Speed</li>
+                        <li>🛡️ - ආරක්ෂාව / Shield</li>
+                        <li>💥 - බලය / Power</li>
+                    </ul>
+                </div>
+            </div>
+
+            <button id="btn-back-instructions" class="menu-btn secondary">
+                <span class="btn-icon">🔙</span>
+                <span class="btn-text">ආපසු</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Settings Screen -->
+    <div id="settings" class="screen hidden">
+        <div class="settings-container">
+            <h2>⚙️ සැකසුම්</h2>
+            <p class="settings-subtitle">Settings</p>
+
+            <div class="settings-grid">
+                <div class="setting-item">
+                    <label>🔊 ශබ්ද පරිමාව / Sound</label>
+                    <input type="range" id="sound-volume" min="0" max="100" value="70">
+                    <span id="sound-value">70%</span>
+                </div>
+
+                <div class="setting-item">
+                    <label>🎵 සංගීතය / Music</label>
+                    <input type="range" id="music-volume" min="0" max="100" value="50">
+                    <span id="music-value">50%</span>
+                </div>
+
+                <div class="setting-item">
+                    <label>🎮 දුෂ්කරතාව / Difficulty</label>
+                    <select id="difficulty">
+                        <option value="easy">පහසු (Easy)</option>
+                        <option value="medium" selected>මධ්‍යම (Medium)</option>
+                        <option value="hard">අමාරු (Hard)</option>
+                    </select>
+                </div>
+
+                <div class="setting-item">
+                    <label>🌐 භාෂාව / Language</label>
+                    <select id="language">
+                        <option value="sinhala" selected>සිංහල</option>
+                        <option value="english">English</option>
+                        <option value="both">Both / දෙකම</option>
+                    </select>
+                </div>
+            </div>
+
+            <button id="btn-back-settings" class="menu-btn secondary">
+                <span class="btn-icon">🔙</span>
+                <span class="btn-text">ආපසු</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen hidden">
+        <!-- Game HUD -->
+        <div id="game-hud">
+            <div class="hud-left">
+                <div class="health-bar">
+                    <div class="health-icon">❤️</div>
+                    <div class="health-container">
+                        <div id="health-fill" class="health-fill"></div>
+                        <span id="health-text">100/100</span>
+                    </div>
+                </div>
+                <div class="lives">
+                    <span id="lives-display">🦁🦁🦁</span>
+                </div>
+            </div>
+
+            <div class="hud-center">
+                <div class="level-display">
+                    <span id="current-level">මට්ටම 1</span>
+                    <span id="level-name">සීගිරිය</span>
+                </div>
+                <div class="wave-display">
+                    <span id="wave-text">රැල්ල 1/5</span>
+                </div>
+            </div>
+
+            <div class="hud-right">
+                <div class="score-display">
+                    <span class="score-label">ලකුණු</span>
+                    <span id="score">0</span>
+                </div>
+                <div class="ammo-display">
+                    <span class="ammo-icon">🏹</span>
+                    <span id="ammo">30/30</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Canvas -->
+        <canvas id="game-canvas"></canvas>
+
+        <!-- Special Ability Bar -->
+        <div id="special-bar">
+            <div class="special-icon">⚡</div>
+            <div class="special-container">
+                <div id="special-fill" class="special-fill"></div>
+            </div>
+            <span class="special-text">විශේෂ ප්‍රහාරය</span>
+        </div>
+
+        <!-- Weapon Display -->
+        <div id="weapon-display">
+            <div class="weapon-icon">🏹</div>
+            <span class="weapon-name">රාවණ ධනුස</span>
+        </div>
+    </div>
+
+    <!-- Pause Menu -->
+    <div id="pause-menu" class="overlay hidden">
+        <div class="pause-container">
+            <h2>⏸️ විරාමය</h2>
+            <p>Game Paused</p>
+
+            <div class="pause-buttons">
+                <button id="btn-resume" class="menu-btn primary">
+                    <span class="btn-icon">▶️</span>
+                    <span class="btn-text">දිගටම කරගෙන යන්න</span>
+                </button>
+                <button id="btn-restart" class="menu-btn">
+                    <span class="btn-icon">🔄</span>
+                    <span class="btn-text">නැවත ආරම්භ කරන්න</span>
+                </button>
+                <button id="btn-quit" class="menu-btn danger">
+                    <span class="btn-icon">🚪</span>
+                    <span class="btn-text">ප්‍රධාන මෙනුව</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Level Complete -->
+    <div id="level-complete" class="overlay hidden">
+        <div class="complete-container">
+            <div class="complete-stars">⭐⭐⭐</div>
+            <h2>🎉 මට්ටම සම්පූර්ණයි!</h2>
+            <p>Level Complete!</p>
+
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <span class="stat-label">ලකුණු</span>
+                    <span id="final-score" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">සතුරන්</span>
+                    <span id="enemies-killed" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">නිරවද්‍යතාව</span>
+                    <span id="accuracy" class="stat-value">0%</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">කාලය</span>
+                    <span id="time-taken" class="stat-value">0:00</span>
+                </div>
+            </div>
+
+            <div class="complete-buttons">
+                <button id="btn-next-level" class="menu-btn primary">
+                    <span class="btn-icon">➡️</span>
+                    <span class="btn-text">ඊළඟ මට්ටම</span>
+                </button>
+                <button id="btn-replay" class="menu-btn">
+                    <span class="btn-icon">🔄</span>
+                    <span class="btn-text">නැවත ක්‍රීඩා කරන්න</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over -->
+    <div id="game-over" class="overlay hidden">
+        <div class="gameover-container">
+            <h2>💀 ක්‍රීඩාව අවසානයි</h2>
+            <p>Game Over</p>
+
+            <div class="gameover-stats">
+                <p>ලකුණු: <span id="gameover-score">0</span></p>
+                <p>ළඟා වූ මට්ටම: <span id="gameover-level">1</span></p>
+            </div>
+
+            <div class="gameover-buttons">
+                <button id="btn-try-again" class="menu-btn primary">
+                    <span class="btn-icon">🔄</span>
+                    <span class="btn-text">නැවත උත්සාහ කරන්න</span>
+                </button>
+                <button id="btn-gameover-menu" class="menu-btn">
+                    <span class="btn-icon">🏠</span>
+                    <span class="btn-text">ප්‍රධාන මෙනුව</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/game.js" type="module"></script>
+</body>
+
+</html>
