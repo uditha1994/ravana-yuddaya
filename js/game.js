@@ -104,6 +104,11 @@ class RavanaGame {
         this.setupEventListeners();
         this.loadSettings();
 
+        // Apply saved language on load
+        if (this.settings.language) {
+            this.applyLanguage(this.settings.language);
+        }
+
         // Start loading
         setTimeout(() => {
             this.gameState = 'menu';
@@ -213,6 +218,14 @@ class RavanaGame {
             this.settings.difficulty = e.target.value;
         });
 
+        // Language setting
+        document.getElementById('language')?.addEventListener('change', (e) => {
+            this.settings.language = e.target.value;
+            this.applyLanguage(e.target.value);
+            this.saveSettings();
+            console.log('Language changed to:', e.target.value);
+        });
+
         console.log('UI Events setup complete');
     }
 
@@ -221,6 +234,19 @@ class RavanaGame {
         if (saved) {
             this.settings = { ...this.settings, ...JSON.parse(saved) };
         }
+
+        // Apply language after loading
+        setTimeout(() => {
+            if (this.settings.language) {
+                this.applyLanguage(this.settings.language);
+
+                // Also update the select element to show correct value
+                const langSelect = document.getElementById('language');
+                if (langSelect) {
+                    langSelect.value = this.settings.language;
+                }
+            }
+        }, 100);
     }
 
     saveSettings() {
@@ -1442,6 +1468,369 @@ class RavanaGame {
         // Special ability
         const specialFill = document.getElementById('special-fill');
         if (specialFill) specialFill.style.width = Math.min(100, this.player.specialCharge) + '%';
+
+        // Level info - Language aware
+        const currentLevelEl = document.getElementById('current-level');
+        const waveTextEl = document.getElementById('wave-text');
+
+        if (currentLevelEl) {
+            const lang = this.settings.language || 'both';
+            if (lang === 'english') {
+                currentLevelEl.textContent = `Level ${this.currentLevel}`;
+            } else {
+                currentLevelEl.textContent = `මට්ටම ${this.currentLevel}`;
+            }
+        }
+
+        if (waveTextEl) {
+            const lang = this.settings.language || 'both';
+            if (lang === 'english') {
+                waveTextEl.textContent = `Wave ${this.wave}/${this.totalWaves}`;
+            } else {
+                waveTextEl.textContent = `රැල්ල ${this.wave}/${this.totalWaves}`;
+            }
+        }
+    }
+
+    applyLanguage(lang) {
+        console.log('Applying language:', lang);
+
+        // Text content mappings
+        const translations = {
+            // Main Menu
+            'btn-play': {
+                sinhala: 'ක්‍රීඩාව ආරම්භ කරන්න',
+                english: 'Start Game',
+                both: 'ක්‍රීඩාව ආරම්භ කරන්න | Start Game'
+            },
+            'btn-levels': {
+                sinhala: 'මට්ටම් තෝරන්න',
+                english: 'Select Level',
+                both: 'මට්ටම් තෝරන්න | Select Level'
+            },
+            'btn-instructions': {
+                sinhala: 'උපදෙස්',
+                english: 'Instructions',
+                both: 'උපදෙස් | Instructions'
+            },
+            'btn-settings': {
+                sinhala: 'සැකසුම්',
+                english: 'Settings',
+                both: 'සැකසුම් | Settings'
+            },
+
+            // Back buttons
+            'btn-back-menu': {
+                sinhala: 'ආපසු',
+                english: 'Back',
+                both: 'ආපසු | Back'
+            },
+            'btn-back-instructions': {
+                sinhala: 'ආපසු',
+                english: 'Back',
+                both: 'ආපසු | Back'
+            },
+            'btn-back-settings': {
+                sinhala: 'ආපසු',
+                english: 'Back',
+                both: 'ආපසු | Back'
+            },
+
+            // Pause menu
+            'btn-resume': {
+                sinhala: 'දිගටම කරගෙන යන්න',
+                english: 'Resume',
+                both: 'දිගටම | Resume'
+            },
+            'btn-restart': {
+                sinhala: 'නැවත ආරම්භ කරන්න',
+                english: 'Restart',
+                both: 'නැවත | Restart'
+            },
+            'btn-quit': {
+                sinhala: 'ප්‍රධාන මෙනුව',
+                english: 'Main Menu',
+                both: 'මෙනුව | Menu'
+            },
+
+            // Level complete
+            'btn-next-level': {
+                sinhala: 'ඊළඟ මට්ටම',
+                english: 'Next Level',
+                both: 'ඊළඟ මට්ටම | Next Level'
+            },
+            'btn-replay': {
+                sinhala: 'නැවත ක්‍රීඩා කරන්න',
+                english: 'Replay',
+                both: 'නැවත | Replay'
+            },
+
+            // Game over
+            'btn-try-again': {
+                sinhala: 'නැවත උත්සාහ කරන්න',
+                english: 'Try Again',
+                both: 'නැවත | Try Again'
+            },
+            'btn-gameover-menu': {
+                sinhala: 'ප්‍රධාන මෙනුව',
+                english: 'Main Menu',
+                both: 'මෙනුව | Menu'
+            }
+        };
+
+        // Apply translations to buttons
+        Object.keys(translations).forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                const text = translations[id][lang] || translations[id]['both'];
+
+                // Check if button has icon structure
+                const btnText = element.querySelector('.btn-text');
+                if (btnText) {
+                    btnText.textContent = text;
+                } else {
+                    // Simple button - preserve emoji if exists
+                    const currentText = element.textContent;
+                    const emojiMatch = currentText.match(/^[\u{1F300}-\u{1F9FF}]|^[⚔️📜⚙️🔙▶️🔄🚪➡️🏠💀]/u);
+                    const emoji = emojiMatch ? emojiMatch[0] + ' ' : '';
+                    element.textContent = emoji + text;
+                }
+            }
+        });
+
+        // Apply to headings and labels
+        this.applyHeadingTranslations(lang);
+        this.applyLabelTranslations(lang);
+    }
+
+    applyHeadingTranslations(lang) {
+        const headings = {
+            // Game title
+            '.game-logo h1': {
+                sinhala: 'රාවණ යුද්ධය',
+                english: 'Ravana Battle',
+                both: 'රාවණ යුද්ධය'
+            },
+            '.game-logo .subtitle': {
+                sinhala: '',
+                english: 'Ravana Battle',
+                both: 'Ravana Battle'
+            },
+
+            // Screen titles
+            '#instructions h2, .instructions-container h2': {
+                sinhala: '📜 උපදෙස්',
+                english: '📜 Instructions',
+                both: '📜 උපදෙස් | Instructions'
+            },
+            '.instructions-subtitle': {
+                sinhala: 'ක්‍රීඩා කරන ආකාරය',
+                english: 'How to Play',
+                both: 'How to Play'
+            },
+
+            '#level-select h2, .level-container h2': {
+                sinhala: '🗺️ මට්ටම් තෝරන්න',
+                english: '🗺️ Select Level',
+                both: '🗺️ මට්ටම් තෝරන්න'
+            },
+            '.level-subtitle': {
+                sinhala: 'ඔබේ සටන තෝරන්න',
+                english: 'Select Your Battle',
+                both: 'Select Your Battle'
+            },
+
+            '#settings h2, .settings-container h2': {
+                sinhala: '⚙️ සැකසුම්',
+                english: '⚙️ Settings',
+                both: '⚙️ සැකසුම් | Settings'
+            },
+            '.settings-subtitle': {
+                sinhala: 'ක්‍රීඩා සැකසුම්',
+                english: 'Game Settings',
+                both: 'Settings'
+            },
+
+            // Pause menu
+            '.pause-container h2': {
+                sinhala: '⏸️ විරාමය',
+                english: '⏸️ Paused',
+                both: '⏸️ විරාමය | Paused'
+            },
+            '.pause-container p': {
+                sinhala: 'ක්‍රීඩාව නතර කර ඇත',
+                english: 'Game Paused',
+                both: 'Game Paused'
+            },
+
+            // Level complete
+            '.complete-container h2': {
+                sinhala: '🎉 මට්ටම සම්පූර්ණයි!',
+                english: '🎉 Level Complete!',
+                both: '🎉 මට්ටම සම්පූර්ණයි!'
+            },
+            '.complete-container p': {
+                sinhala: 'සුභ පැතුම්!',
+                english: 'Congratulations!',
+                both: 'Level Complete!'
+            },
+
+            // Game over
+            '.gameover-container h2': {
+                sinhala: '💀 ක්‍රීඩාව අවසානයි',
+                english: '💀 Game Over',
+                both: '💀 ක්‍රීඩාව අවසානයි'
+            },
+            '.gameover-container p': {
+                sinhala: 'නැවත උත්සාහ කරන්න',
+                english: 'Try Again',
+                both: 'Game Over'
+            }
+        };
+
+        Object.keys(headings).forEach(selector => {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(element => {
+                if (element) {
+                    element.textContent = headings[selector][lang] || headings[selector]['both'];
+                }
+            });
+        });
+    }
+
+    applyLabelTranslations(lang) {
+        const labels = {
+            // HUD elements
+            '#current-level': {
+                sinhala: `මට්ටම ${this.currentLevel}`,
+                english: `Level ${this.currentLevel}`,
+                both: `මට්ටම ${this.currentLevel}`
+            },
+            '#wave-text': {
+                sinhala: `රැල්ල ${this.wave}/${this.totalWaves}`,
+                english: `Wave ${this.wave}/${this.totalWaves}`,
+                both: `රැල්ල ${this.wave}/${this.totalWaves}`
+            },
+            '.score-label': {
+                sinhala: 'ලකුණු',
+                english: 'Score',
+                both: 'ලකුණු'
+            },
+
+            // Stats labels
+            '.stat-label': {
+                sinhala: ['ලකුණු', 'සතුරන්', 'නිරවද්‍යතාව', 'කාලය'],
+                english: ['Score', 'Enemies', 'Accuracy', 'Time'],
+                both: ['ලකුණු', 'සතුරන්', 'නිරවද්‍යතාව', 'කාලය']
+            },
+
+            // Settings labels
+            '#sound-volume': {
+                parent: true,
+                sinhala: '🔊 ශබ්ද පරිමාව',
+                english: '🔊 Sound Volume',
+                both: '🔊 ශබ්ද පරිමාව | Sound'
+            },
+            '#music-volume': {
+                parent: true,
+                sinhala: '🎵 සංගීතය',
+                english: '🎵 Music Volume',
+                both: '🎵 සංගීතය | Music'
+            },
+            '#difficulty': {
+                parent: true,
+                sinhala: '🎮 දුෂ්කරතාව',
+                english: '🎮 Difficulty',
+                both: '🎮 දුෂ්කරතාව | Difficulty'
+            },
+            '#language': {
+                parent: true,
+                sinhala: '🌐 භාෂාව',
+                english: '🌐 Language',
+                both: '🌐 භාෂාව | Language'
+            }
+        };
+
+        Object.keys(labels).forEach(selector => {
+            const config = labels[selector];
+
+            if (selector === '.stat-label') {
+                // Handle multiple stat labels
+                const elements = document.querySelectorAll(selector);
+                const texts = config[lang] || config['both'];
+                elements.forEach((el, index) => {
+                    if (texts[index]) {
+                        el.textContent = texts[index];
+                    }
+                });
+            } else if (config.parent) {
+                // Handle parent label (for settings)
+                const input = document.querySelector(selector);
+                if (input) {
+                    const label = input.closest('.setting-item')?.querySelector('label');
+                    if (label) {
+                        label.textContent = config[lang] || config['both'];
+                    }
+                }
+            } else {
+                const element = document.querySelector(selector);
+                if (element) {
+                    element.textContent = config[lang] || config['both'];
+                }
+            }
+        });
+
+        // Update difficulty options
+        this.updateDifficultyOptions(lang);
+
+        // Update instruction cards
+        this.updateInstructionCards(lang);
+    }
+
+    updateDifficultyOptions(lang) {
+        const difficultySelect = document.getElementById('difficulty');
+        if (!difficultySelect) return;
+
+        const options = {
+            easy: { sinhala: 'පහසු', english: 'Easy', both: 'පහසු (Easy)' },
+            medium: { sinhala: 'මධ්‍යම', english: 'Medium', both: 'මධ්‍යම (Medium)' },
+            hard: { sinhala: 'අමාරු', english: 'Hard', both: 'අමාරු (Hard)' }
+        };
+
+        Array.from(difficultySelect.options).forEach(option => {
+            const key = option.value;
+            if (options[key]) {
+                option.textContent = options[key][lang] || options[key]['both'];
+            }
+        });
+    }
+
+    updateInstructionCards(lang) {
+        const cards = document.querySelectorAll('.instruction-card');
+
+        const instructions = [
+            {
+                title: { sinhala: 'පාලනය', english: 'Controls', both: 'පාලනය | Controls' },
+                icon: '⌨️'
+            },
+            {
+                title: { sinhala: 'අරමුණ', english: 'Goal', both: 'අරමුණ | Goal' },
+                icon: '🎯'
+            },
+            {
+                title: { sinhala: 'බෝනස්', english: 'Power-ups', both: 'බෝනස් | Power-ups' },
+                icon: '💎'
+            }
+        ];
+
+        cards.forEach((card, index) => {
+            if (instructions[index]) {
+                const h3 = card.querySelector('h3');
+                if (h3) {
+                    h3.textContent = instructions[index].title[lang] || instructions[index].title['both'];
+                }
+            }
+        });
     }
 }
 
