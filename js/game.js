@@ -2,9 +2,8 @@
 // රාවණ යුද්ධය - Main Game Engine
 // ============================================
 
-// Import modules
 import { Player } from './player.js';
-import { Enemy, EnemyTypes } from './enemy.js';
+import { Enemy } from './enemy.js';
 import { Bullet } from './bullet.js';
 import { LevelManager, LEVELS } from './levels.js';
 import { UIManager } from './ui.js';
@@ -14,12 +13,14 @@ import { AudioManager } from './audio.js';
 // Game Constants
 // ============================================
 const GAME_CONFIG = {
-    FPS: 60,
-    CANVAS_PADDING: 50,
+    MAX_ENEMIES: 25,
+    MAX_BULLETS: 80,
+    MAX_ENEMY_BULLETS: 50,
+    MAX_PARTICLES: 60,
+    MAX_POWERUPS: 10,
     SPAWN_PADDING: 100,
-    POWERUP_DURATION: 10000,
     SPECIAL_CHARGE_RATE: 0.5,
-    MAX_PARTICLES: 100
+    WAVE_DELAY: 2000
 };
 
 // ============================================
@@ -32,7 +33,7 @@ class RavanaGame {
         this.ctx = this.canvas.getContext('2d');
 
         // Game state
-        this.gameState = 'loading'; // loading, menu, playing, paused, levelComplete, gameOver
+        this.gameState = 'loading';
         this.currentLevel = 1;
         this.score = 0;
         this.lives = 3;
@@ -47,7 +48,7 @@ class RavanaGame {
             startTime: 0
         };
 
-        // Game objects
+        // Game objects - Initialize as empty arrays
         this.player = null;
         this.enemies = [];
         this.bullets = [];
@@ -72,6 +73,25 @@ class RavanaGame {
             language: 'both'
         };
 
+        // Animation frame control
+        this.animFrameId = null;
+        this.isRunning = false;
+        this.lastTime = 0;
+
+        // Wave management - IMPORTANT
+        this.waveActive = false;
+        this.waveStarted = false;
+        this.waveSpawnTimeout = null;
+        this.enemiesSpawnedThisWave = 0;
+        this.enemiesKilledThisWave = 0;
+        this.totalEnemiesInWave = 0;
+
+        // Debug info
+        this.debugMode = true;
+        this.frameCount = 0;
+        this.fps = 0;
+        this.lastFpsUpdate = 0;
+
         // Initialize
         this.init();
     }
@@ -89,6 +109,15 @@ class RavanaGame {
             this.gameState = 'menu';
             this.showScreen('main-menu');
         }, 2000);
+
+        // Debug: Log initialization
+        this.log('Game initialized');
+    }
+
+    log(message) {
+        if (this.debugMode) {
+            console.log(`[RavanaGame] ${message}`);
+        }
     }
 
     setupCanvas() {
@@ -114,6 +143,13 @@ class RavanaGame {
         // Prevent context menu
         this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+        // Handle tab visibility - IMPORTANT for preventing stuck
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && this.gameState === 'playing') {
+                this.pauseGame();
+            }
+        });
+
         // UI button events
         this.setupUIEvents();
     }
@@ -125,10 +161,19 @@ class RavanaGame {
         document.getElementById('btn-instructions')?.addEventListener('click', () => this.showScreen('instructions'));
         document.getElementById('btn-settings')?.addEventListener('click', () => this.showScreen('settings'));
 
-        // Back buttons
-        document.getElementById('btn-back-menu')?.addEventListener('click', () => this.showScreen('main-menu'));
-        document.getElementById('btn-back-instructions')?.addEventListener('click', () => this.showScreen('main-menu'));
-        document.getElementById('btn-back-settings')?.addEventListener('click', () => this.showScreen('main-menu'));
+        const backToMenuButtons = [
+            'btn-back-menu',
+            'btn-back-instructions',
+            'btn-back-settings',
+            'btn-back'
+        ];
+
+        backToMenuButtons.forEach(id => {
+            document.getElementById(id)?.addEventListener('click', () => {
+                console.log(`Back button clicked: ${id}`);
+                this.showScreen('main-menu');
+            });
+        });
 
         // Level selection
         document.querySelectorAll('.level-card').forEach(card => {
@@ -167,6 +212,8 @@ class RavanaGame {
         document.getElementById('difficulty')?.addEventListener('change', (e) => {
             this.settings.difficulty = e.target.value;
         });
+
+        console.log('UI Events setup complete');
     }
 
     loadSettings() {
@@ -190,8 +237,8 @@ class RavanaGame {
             if (e.code === 'Escape') {
                 this.pauseGame();
             }
-            if (e.code === 'KeyR') {
-                this.player?.reload();
+            if (e.code === 'KeyR' && this.player) {
+                this.player.reload();
             }
             if (e.code === 'Space') {
                 this.useSpecialAbility();
@@ -254,6 +301,14 @@ class RavanaGame {
     // Game Flow
     // ============================================
     startGame(level) {
+        this.log(`Starting game - Level ${level}`);
+
+        // Cancel any existing game loop
+        this.stopGameLoop();
+
+        // Clear any pending wave spawns
+        this.clearWaveTimers();
+
         this.currentLevel = level;
         this.wave = 1;
         this.score = 0;
@@ -277,7 +332,7 @@ class RavanaGame {
         // Start game loop
         this.gameState = 'playing';
         this.lastTime = performance.now();
-        this.gameLoop();
+        this.startGameLoop();
 
         // Update HUD
         this.updateHUD();
@@ -285,6 +340,12 @@ class RavanaGame {
 
     initializeLevel() {
         const levelData = LEVELS[this.currentLevel - 1];
+
+        if (!levelData) {
+            console.error('Level data not found!');
+            this.quitToMenu();
+            return;
+        }
 
         // Create player
         this.player = new Player(
@@ -300,39 +361,134 @@ class RavanaGame {
         this.powerups = [];
         this.particles = [];
 
-        // Get wave data and spawn enemies
+        // Reset wave state - CRITICAL
         this.totalWaves = levelData.waves.length;
-        this.spawnWave();
+        this.wave = 1;
+        this.waveActive = false;
+        this.waveStarted = false;
+        this.enemiesSpawnedThisWave = 0;
+        this.enemiesKilledThisWave = 0;
+        this.totalEnemiesInWave = 0;
+
+        // Clear any existing timeout
+        if (this.waveSpawnTimeout) {
+            clearTimeout(this.waveSpawnTimeout);
+            this.waveSpawnTimeout = null;
+        }
 
         // Update level display
-        document.getElementById('current-level').textContent = `මට්ටම ${this.currentLevel}`;
-        document.getElementById('level-name').textContent = levelData.nameSinhala;
+        const currentLevelEl = document.getElementById('current-level');
+        const levelNameEl = document.getElementById('level-name');
+
+        if (currentLevelEl) currentLevelEl.textContent = `මට්ටම ${this.currentLevel}`;
+        if (levelNameEl) levelNameEl.textContent = levelData.nameSinhala;
+
+        // Start first wave after a short delay
+        this.waveSpawnTimeout = setTimeout(() => {
+            if (this.gameState === 'playing') {
+                this.spawnWave();
+            }
+        }, 1000);
+    }
+
+    clearAllGameObjects() {
+        this.enemies = [];
+        this.bullets = [];
+        this.enemyBullets = [];
+        this.powerups = [];
+        this.particles = [];
+        this.player = null;
+    }
+
+    clearWaveTimers() {
+        if (this.waveSpawnTimer) {
+            clearTimeout(this.waveSpawnTimer);
+            this.waveSpawnTimer = null;
+        }
+        this.isSpawningWave = false;
+        this.pendingEnemies = 0;
+    }
+
+    scheduleWaveSpawn() {
+        this.clearWaveTimers();
+
+        this.waveSpawnTimer = setTimeout(() => {
+            if (this.gameState === 'playing') {
+                this.spawnWave();
+            }
+        }, 1000);
     }
 
     spawnWave() {
+        // Safety checks
+        if (this.gameState !== 'playing') return;
+        if (this.waveActive) return; // Don't spawn if already spawning
+
         const levelData = LEVELS[this.currentLevel - 1];
+        if (!levelData) return;
+
         const waveData = levelData.waves[this.wave - 1];
 
         if (!waveData) {
+            // No more waves - level complete
             this.levelComplete();
             return;
         }
 
-        document.getElementById('wave-text').textContent = `රැල්ල ${this.wave}/${this.totalWaves}`;
+        console.log(`Starting Wave ${this.wave}/${this.totalWaves}`);
 
-        // Spawn enemies based on wave data
+        // Mark wave as active
+        this.waveActive = true;
+        this.waveStarted = true;
+        this.enemiesSpawnedThisWave = 0;
+        this.enemiesKilledThisWave = 0;
+
+        // Calculate total enemies in this wave
+        this.totalEnemiesInWave = 0;
         waveData.enemies.forEach(enemyConfig => {
+            this.totalEnemiesInWave += enemyConfig.count;
+        });
+
+        console.log(`Wave ${this.wave}: Spawning ${this.totalEnemiesInWave} enemies`);
+
+        // Update wave display
+        const waveTextEl = document.getElementById('wave-text');
+        if (waveTextEl) {
+            waveTextEl.textContent = `රැල්ල ${this.wave}/${this.totalWaves}`;
+        }
+
+        // Spawn enemies with delays
+        let spawnDelay = 0;
+
+        waveData.enemies.forEach(enemyConfig => {
+            const delayBetweenEnemies = enemyConfig.delay || 500;
+
             for (let i = 0; i < enemyConfig.count; i++) {
+                const currentDelay = spawnDelay;
+
                 setTimeout(() => {
-                    if (this.gameState === 'playing') {
+                    if (this.gameState === 'playing' && this.waveActive) {
                         this.spawnEnemy(enemyConfig.type);
+                        this.enemiesSpawnedThisWave++;
+
+                        // Check if all enemies spawned
+                        if (this.enemiesSpawnedThisWave >= this.totalEnemiesInWave) {
+                            console.log(`All ${this.totalEnemiesInWave} enemies spawned for wave ${this.wave}`);
+                        }
                     }
-                }, i * enemyConfig.delay);
+                }, currentDelay);
+
+                spawnDelay += delayBetweenEnemies;
             }
         });
     }
 
     spawnEnemy(type) {
+        if (this.enemies.length >= GAME_CONFIG.MAX_ENEMIES) {
+            this.log('Max enemies reached, skipping spawn');
+            return;
+        }
+
         const padding = GAME_CONFIG.SPAWN_PADDING;
         const side = Math.floor(Math.random() * 4);
         let x, y;
@@ -356,45 +512,125 @@ class RavanaGame {
                 break;
         }
 
-        const enemy = new Enemy(x, y, type, this);
-        this.enemies.push(enemy);
+        try {
+            const enemy = new Enemy(x, y, type, this);
+            this.enemies.push(enemy);
+        } catch (error) {
+            this.log(`Error spawning enemy: ${error.message}`);
+        }
     }
 
-    pauseGame() {
-        this.gameState = 'paused';
-        this.showOverlay('pause-menu');
-    }
+    // ============================================
+    // Game Loop Control
+    // ============================================
+    startGameLoop() {
+        if (this.isRunning) return;
 
-    resumeGame() {
-        this.hideOverlay('pause-menu');
-        this.gameState = 'playing';
+        this.log('Starting game loop');
+        this.isRunning = true;
         this.lastTime = performance.now();
         this.gameLoop();
     }
 
+    stopGameLoop() {
+        this.log('Stopping game loop');
+        this.isRunning = false;
+
+        if (this.animFrameId) {
+            cancelAnimationFrame(this.animFrameId);
+            this.animFrameId = null;
+        }
+    }
+
+    pauseGame() {
+        if (this.gameState !== 'playing') return;
+
+        this.log('Game paused');
+        this.gameState = 'paused';
+        this.stopGameLoop();
+        this.showOverlay('pause-menu');
+    }
+
+    resumeGame() {
+        if (this.gameState !== 'paused') return;
+
+        this.log('Game resumed');
+        this.hideOverlay('pause-menu');
+        this.gameState = 'playing';
+        this.lastTime = performance.now();
+        this.startGameLoop();
+    }
+
     restartLevel() {
+        this.log('Restarting level');
         this.hideAllOverlays();
         this.startGame(this.currentLevel);
     }
 
     nextLevel() {
+        this.log('Next level');
         this.hideAllOverlays();
+
         if (this.currentLevel < LEVELS.length) {
             this.startGame(this.currentLevel + 1);
         } else {
-            // Game complete!
             this.quitToMenu();
         }
     }
 
     quitToMenu() {
+        console.log('Quitting to menu');
+
+        // Stop game loop first
         this.gameState = 'menu';
+        this.isRunning = false;
+
+        if (this.animFrameId) {
+            cancelAnimationFrame(this.animFrameId);
+            this.animFrameId = null;
+        }
+
+        // Clear wave timeout
+        if (this.waveSpawnTimeout) {
+            clearTimeout(this.waveSpawnTimeout);
+            this.waveSpawnTimeout = null;
+        }
+
+        // Reset wave state
+        this.waveActive = false;
+        this.waveStarted = false;
+        this.enemiesSpawnedThisWave = 0;
+        this.totalEnemiesInWave = 0;
+
+        // Clear all objects
+        this.enemies = [];
+        this.bullets = [];
+        this.enemyBullets = [];
+        this.powerups = [];
+        this.particles = [];
+        this.player = null;
+
         this.hideAllOverlays();
         this.showScreen('main-menu');
     }
 
     levelComplete() {
+        if (this.gameState !== 'playing') return;
+
+        console.log('Level Complete!');
+
         this.gameState = 'levelComplete';
+        this.isRunning = false;
+
+        if (this.animFrameId) {
+            cancelAnimationFrame(this.animFrameId);
+            this.animFrameId = null;
+        }
+
+        if (this.waveSpawnTimeout) {
+            clearTimeout(this.waveSpawnTimeout);
+            this.waveSpawnTimeout = null;
+        }
 
         // Calculate stats
         const timeTaken = Math.floor((Date.now() - this.stats.startTime) / 1000);
@@ -402,21 +638,45 @@ class RavanaGame {
             ? Math.round((this.stats.shotsHit / this.stats.shotsFired) * 100)
             : 0;
 
-        // Update UI
-        document.getElementById('final-score').textContent = this.score;
-        document.getElementById('enemies-killed').textContent = this.stats.enemiesKilled;
-        document.getElementById('accuracy').textContent = accuracy + '%';
-        document.getElementById('time-taken').textContent =
-            `${Math.floor(timeTaken / 60)}:${(timeTaken % 60).toString().padStart(2, '0')}`;
+        // Update UI safely
+        const finalScoreEl = document.getElementById('final-score');
+        const enemiesKilledEl = document.getElementById('enemies-killed');
+        const accuracyEl = document.getElementById('accuracy');
+        const timeTakenEl = document.getElementById('time-taken');
+
+        if (finalScoreEl) finalScoreEl.textContent = this.score;
+        if (enemiesKilledEl) enemiesKilledEl.textContent = this.stats.enemiesKilled;
+        if (accuracyEl) accuracyEl.textContent = accuracy + '%';
+        if (timeTakenEl) {
+            timeTakenEl.textContent = `${Math.floor(timeTaken / 60)}:${(timeTaken % 60).toString().padStart(2, '0')}`;
+        }
 
         this.showOverlay('level-complete');
     }
 
     gameOver() {
-        this.gameState = 'gameOver';
+        if (this.gameState === 'gameOver') return;
 
-        document.getElementById('gameover-score').textContent = this.score;
-        document.getElementById('gameover-level').textContent = this.currentLevel;
+        console.log('Game Over!');
+
+        this.gameState = 'gameOver';
+        this.isRunning = false;
+
+        if (this.animFrameId) {
+            cancelAnimationFrame(this.animFrameId);
+            this.animFrameId = null;
+        }
+
+        if (this.waveSpawnTimeout) {
+            clearTimeout(this.waveSpawnTimeout);
+            this.waveSpawnTimeout = null;
+        }
+
+        const goScoreEl = document.getElementById('gameover-score');
+        const goLevelEl = document.getElementById('gameover-level');
+
+        if (goScoreEl) goScoreEl.textContent = this.score;
+        if (goLevelEl) goLevelEl.textContent = this.currentLevel;
 
         this.showOverlay('game-over');
     }
@@ -424,20 +684,18 @@ class RavanaGame {
     useSpecialAbility() {
         if (this.player && this.player.specialCharge >= 100) {
             this.player.useSpecial();
-
-            // Create special attack effect
             this.createSpecialAttack();
         }
     }
 
     createSpecialAttack() {
         // Damage all enemies on screen
-        this.enemies.forEach(enemy => {
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
             enemy.takeDamage(50);
             this.createExplosion(enemy.x, enemy.y, '#9b59b6');
-        });
+        }
 
-        // Screen flash effect
         this.screenFlash('#9b59b6');
     }
 
@@ -445,91 +703,337 @@ class RavanaGame {
     // Main Game Loop
     // ============================================
     gameLoop() {
-        if (this.gameState !== 'playing') return;
+        // Safety check - stop if not playing
+        if (this.gameState !== 'playing' || !this.isRunning) {
+            this.isRunning = false;
+            return;
+        }
 
         const currentTime = performance.now();
-        const deltaTime = (currentTime - this.lastTime) / 1000;
+        const rawDelta = (currentTime - this.lastTime) / 1000;
+
+        // Cap delta time to prevent huge jumps (max 100ms)
+        const deltaTime = Math.min(rawDelta, 0.1);
         this.lastTime = currentTime;
 
+        // FPS calculation
+        this.frameCount++;
+        if (currentTime - this.lastFpsUpdate >= 1000) {
+            this.fps = this.frameCount;
+            this.frameCount = 0;
+            this.lastFpsUpdate = currentTime;
+        }
+
+        // Update and render
         this.update(deltaTime);
         this.render();
 
-        requestAnimationFrame(() => this.gameLoop());
+        // Debug info
+        if (this.debugMode) {
+            this.renderDebugInfo();
+        }
+
+        // Schedule next frame
+        this.animFrameId = requestAnimationFrame(() => this.gameLoop());
     }
 
+    // ============================================
+    // Update Logic
+    // ============================================
     update(dt) {
+        // Validate delta time
+        if (!dt || dt <= 0 || dt > 0.1 || isNaN(dt)) {
+            dt = 0.016;
+        }
+
         // Update player
         if (this.player) {
             this.player.update(dt, this.keys, this.mouse);
 
             // Shooting
             if (this.mouse.down && this.player.canShoot()) {
+                if (this.bullets.length < 80) {
+                    const bullet = this.player.shoot(this.mouse.x, this.mouse.y);
+                    if (bullet) {
+                        this.bullets.push(bullet);
+                        this.stats.shotsFired++;
+                    }
+                }
+            }
+
+            this.player.chargeSpecial(GAME_CONFIG.SPECIAL_CHARGE_RATE * dt);
+        }
+
+        // Update bullets (reverse loop for safe removal)
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            const bullet = this.bullets[i];
+            if (!bullet) {
+                this.bullets.splice(i, 1);
+                continue;
+            }
+            bullet.update(dt);
+            if (!bullet.isActive || !this.isInBounds(bullet)) {
+                this.bullets.splice(i, 1);
+            }
+        }
+
+        // Update enemy bullets
+        for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
+            const bullet = this.enemyBullets[i];
+            if (!bullet) {
+                this.enemyBullets.splice(i, 1);
+                continue;
+            }
+            bullet.update(dt);
+            if (!bullet.isActive || !this.isInBounds(bullet)) {
+                this.enemyBullets.splice(i, 1);
+            }
+        }
+
+        // Update enemies
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
+            if (!enemy) {
+                this.enemies.splice(i, 1);
+                continue;
+            }
+            enemy.update(dt, this.player);
+            if (!enemy.isAlive) {
+                this.enemies.splice(i, 1);
+                this.enemiesKilledThisWave++;
+            }
+        }
+
+        // Update powerups
+        for (let i = this.powerups.length - 1; i >= 0; i--) {
+            const powerup = this.powerups[i];
+            if (!powerup) {
+                this.powerups.splice(i, 1);
+                continue;
+            }
+            powerup.update(dt);
+            if (!powerup.isActive) {
+                this.powerups.splice(i, 1);
+            }
+        }
+
+        // Update particles (limit count)
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const particle = this.particles[i];
+            if (!particle) {
+                this.particles.splice(i, 1);
+                continue;
+            }
+            particle.update(dt);
+            if (particle.alpha <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+
+        // Enforce particle limit
+        while (this.particles.length > 60) {
+            this.particles.shift();
+        }
+
+        // Check collisions
+        this.checkCollisions();
+
+        // Check wave completion - IMPORTANT: This is the key fix
+        this.checkWaveCompletion();
+
+        // Update HUD
+        this.updateHUD();
+    }
+
+    updatePlayer(dt) {
+        if (!this.player) return;
+
+        this.player.update(dt, this.keys, this.mouse);
+
+        // Shooting
+        if (this.mouse.down && this.player.canShoot()) {
+            if (this.bullets.length < GAME_CONFIG.MAX_BULLETS) {
                 const bullet = this.player.shoot(this.mouse.x, this.mouse.y);
                 if (bullet) {
                     this.bullets.push(bullet);
                     this.stats.shotsFired++;
                 }
             }
-
-            // Charge special ability
-            this.player.chargeSpecial(GAME_CONFIG.SPECIAL_CHARGE_RATE * dt);
         }
 
-        // Update bullets
-        this.bullets = this.bullets.filter(bullet => {
+        // Charge special ability
+        this.player.chargeSpecial(GAME_CONFIG.SPECIAL_CHARGE_RATE * dt);
+    }
+
+    updateBullets(dt) {
+        // Update player bullets
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            const bullet = this.bullets[i];
+
+            if (!bullet) {
+                this.bullets.splice(i, 1);
+                continue;
+            }
+
             bullet.update(dt);
-            return bullet.isActive && this.isInBounds(bullet);
-        });
 
-        // Update enemy bullets
-        this.enemyBullets = this.enemyBullets.filter(bullet => {
-            bullet.update(dt);
-            return bullet.isActive && this.isInBounds(bullet);
-        });
-
-        // Update enemies
-        this.enemies = this.enemies.filter(enemy => {
-            enemy.update(dt, this.player);
-            return enemy.isAlive;
-        });
-
-        // Update powerups
-        this.powerups = this.powerups.filter(powerup => {
-            powerup.update(dt);
-            return powerup.isActive;
-        });
-
-        // Update particles
-        this.particles = this.particles.filter(particle => {
-            particle.update(dt);
-            return particle.alpha > 0;
-        });
-
-        // Check collisions
-        this.checkCollisions();
-
-        // Check wave completion
-        if (this.enemies.length === 0 && this.gameState === 'playing') {
-            this.wave++;
-            if (this.wave <= this.totalWaves) {
-                setTimeout(() => this.spawnWave(), 2000);
-            } else {
-                this.levelComplete();
+            if (!bullet.isActive || !this.isInBounds(bullet)) {
+                this.bullets.splice(i, 1);
             }
         }
 
-        // Update HUD
-        this.updateHUD();
+        // Update enemy bullets
+        for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
+            const bullet = this.enemyBullets[i];
+
+            if (!bullet) {
+                this.enemyBullets.splice(i, 1);
+                continue;
+            }
+
+            bullet.update(dt);
+
+            if (!bullet.isActive || !this.isInBounds(bullet)) {
+                this.enemyBullets.splice(i, 1);
+            }
+        }
+
+        // Enforce bullet limits
+        while (this.bullets.length > GAME_CONFIG.MAX_BULLETS) {
+            this.bullets.shift();
+        }
+        while (this.enemyBullets.length > GAME_CONFIG.MAX_ENEMY_BULLETS) {
+            this.enemyBullets.shift();
+        }
     }
 
+    updateEnemies(dt) {
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
+
+            if (!enemy) {
+                this.enemies.splice(i, 1);
+                continue;
+            }
+
+            enemy.update(dt, this.player);
+
+            if (!enemy.isAlive) {
+                this.enemies.splice(i, 1);
+            }
+        }
+    }
+
+    updatePowerups(dt) {
+        for (let i = this.powerups.length - 1; i >= 0; i--) {
+            const powerup = this.powerups[i];
+
+            if (!powerup) {
+                this.powerups.splice(i, 1);
+                continue;
+            }
+
+            powerup.update(dt);
+
+            if (!powerup.isActive) {
+                this.powerups.splice(i, 1);
+            }
+        }
+
+        // Limit powerups
+        while (this.powerups.length > GAME_CONFIG.MAX_POWERUPS) {
+            this.powerups.shift();
+        }
+    }
+
+    updateParticles(dt) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const particle = this.particles[i];
+
+            if (!particle) {
+                this.particles.splice(i, 1);
+                continue;
+            }
+
+            particle.update(dt);
+
+            if (particle.alpha <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+
+        // Limit particles
+        while (this.particles.length > GAME_CONFIG.MAX_PARTICLES) {
+            this.particles.shift();
+        }
+    }
+
+    checkWaveCompletion() {
+        // Don't check if not playing
+        if (this.gameState !== 'playing') return;
+
+        // Don't check if wave hasn't started yet
+        if (!this.waveStarted) return;
+
+        // Don't check if still spawning enemies
+        if (this.enemiesSpawnedThisWave < this.totalEnemiesInWave) return;
+
+        // Check if all enemies are dead
+        if (this.enemies.length === 0 && this.waveActive) {
+            console.log(`Wave ${this.wave} complete!`);
+
+            this.waveActive = false;
+
+            // Move to next wave
+            this.wave++;
+
+            if (this.wave <= this.totalWaves) {
+                console.log(`Preparing wave ${this.wave}...`);
+
+                // Reset wave state
+                this.waveStarted = false;
+                this.enemiesSpawnedThisWave = 0;
+                this.enemiesKilledThisWave = 0;
+                this.totalEnemiesInWave = 0;
+
+                // Spawn next wave after delay
+                this.waveSpawnTimeout = setTimeout(() => {
+                    if (this.gameState === 'playing') {
+                        this.spawnWave();
+                    }
+                }, 2000);
+            } else {
+                // All waves complete
+                console.log('All waves complete! Level finished!');
+                this.levelComplete();
+            }
+        }
+    }
+
+    // ============================================
+    // Collision Detection
+    // ============================================
     checkCollisions() {
-        // Player bullets vs Enemies
-        this.bullets.forEach(bullet => {
-            this.enemies.forEach(enemy => {
+        this.checkBulletEnemyCollisions();
+        this.checkEnemyBulletPlayerCollisions();
+        this.checkEnemyPlayerCollisions();
+        this.checkPowerupCollisions();
+    }
+
+    checkBulletEnemyCollisions() {
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            const bullet = this.bullets[i];
+            if (!bullet || !bullet.isActive) continue;
+
+            for (let j = this.enemies.length - 1; j >= 0; j--) {
+                const enemy = this.enemies[j];
+                if (!enemy || !enemy.isAlive) continue;
+
                 if (this.checkCollision(bullet, enemy)) {
                     bullet.isActive = false;
-                    const killed = enemy.takeDamage(bullet.damage);
                     this.stats.shotsHit++;
+
+                    const killed = enemy.takeDamage(bullet.damage);
 
                     if (killed) {
                         this.score += enemy.points;
@@ -537,73 +1041,116 @@ class RavanaGame {
                         this.createExplosion(enemy.x, enemy.y, enemy.color);
 
                         // Chance to spawn powerup
-                        if (Math.random() < 0.2) {
+                        if (Math.random() < 0.2 && this.powerups.length < GAME_CONFIG.MAX_POWERUPS) {
                             this.spawnPowerup(enemy.x, enemy.y);
                         }
                     }
+                    break;
                 }
-            });
-        });
+            }
+        }
+    }
 
-        // Enemy bullets vs Player
-        this.enemyBullets.forEach(bullet => {
-            if (this.player && this.checkCollision(bullet, this.player)) {
+    checkEnemyBulletPlayerCollisions() {
+        if (!this.player || !this.player.alive) return;
+        if (this.player.invincible) return;
+
+        for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
+            const bullet = this.enemyBullets[i];
+            if (!bullet || !bullet.isActive) continue;
+
+            if (this.checkCollision(bullet, this.player)) {
                 bullet.isActive = false;
                 this.player.takeDamage(bullet.damage);
-
-                if (this.player.health <= 0) {
-                    this.lives--;
-                    if (this.lives > 0) {
-                        this.player.respawn();
-                    } else {
-                        this.gameOver();
-                    }
-                }
+                this.handlePlayerDamage();
+                break;
             }
-        });
+        }
+    }
 
-        // Enemies vs Player (collision damage)
-        this.enemies.forEach(enemy => {
-            if (this.player && this.checkCollision(enemy, this.player)) {
-                this.player.takeDamage(enemy.collisionDamage);
+    checkEnemyPlayerCollisions() {
+        if (!this.player || !this.player.alive) return;
+        if (this.player.invincible) return;
+
+        for (const enemy of this.enemies) {
+            if (!enemy || !enemy.isAlive) continue;
+
+            if (this.checkCollision(enemy, this.player)) {
+                this.player.takeDamage(enemy.collisionDamage || 10);
                 enemy.knockback(this.player);
+                this.handlePlayerDamage();
+                break;
             }
-        });
+        }
+    }
 
-        // Powerups vs Player
-        this.powerups.forEach(powerup => {
-            if (this.player && this.checkCollision(powerup, this.player)) {
+    checkPowerupCollisions() {
+        if (!this.player || !this.player.alive) return;
+
+        for (let i = this.powerups.length - 1; i >= 0; i--) {
+            const powerup = this.powerups[i];
+            if (!powerup || !powerup.isActive) continue;
+
+            if (this.checkCollision(powerup, this.player)) {
                 this.collectPowerup(powerup);
                 powerup.isActive = false;
             }
-        });
+        }
+    }
+
+    handlePlayerDamage() {
+        if (!this.player) return;
+
+        if (this.player.health <= 0) {
+            this.lives--;
+
+            if (this.lives > 0) {
+                this.player.respawn();
+            } else {
+                this.gameOver();
+            }
+        }
     }
 
     checkCollision(obj1, obj2) {
+        if (!obj1 || !obj2) return false;
+
         const dx = obj1.x - obj2.x;
         const dy = obj1.y - obj2.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        return distance < (obj1.radius || obj1.size / 2) + (obj2.radius || obj2.size / 2);
+
+        const r1 = obj1.radius || (obj1.size ? obj1.size / 2 : 10);
+        const r2 = obj2.radius || (obj2.size ? obj2.size / 2 : 10);
+
+        return distance < r1 + r2;
     }
 
-    isInBounds(obj) {
-        const padding = 50;
+    isInBounds(obj, padding = 100) {
+        if (!obj) return false;
+
         return obj.x > -padding &&
             obj.x < this.canvas.width + padding &&
             obj.y > -padding &&
             obj.y < this.canvas.height + padding;
     }
 
+    // ============================================
+    // Powerups
+    // ============================================
     spawnPowerup(x, y) {
+        if (this.powerups.length >= GAME_CONFIG.MAX_POWERUPS) return;
+
         const types = ['health', 'speed', 'shield', 'power'];
         const type = types[Math.floor(Math.random() * types.length)];
 
         this.powerups.push({
-            x, y,
+            x,
+            y,
             type,
             radius: 15,
             isActive: true,
             bobOffset: Math.random() * Math.PI * 2,
+            displayY: y,
             update(dt) {
                 this.bobOffset += dt * 3;
                 this.displayY = this.y + Math.sin(this.bobOffset) * 5;
@@ -612,6 +1159,8 @@ class RavanaGame {
     }
 
     collectPowerup(powerup) {
+        if (!this.player) return;
+
         switch (powerup.type) {
             case 'health':
                 this.player.heal(30);
@@ -630,24 +1179,33 @@ class RavanaGame {
         this.createPickupEffect(powerup.x, powerup.y, powerup.type);
     }
 
+    // ============================================
+    // Particle Effects
+    // ============================================
     createExplosion(x, y, color) {
-        for (let i = 0; i < 15; i++) {
-            const angle = (Math.PI * 2 / 15) * i;
-            const speed = 100 + Math.random() * 100;
+        const availableSlots = GAME_CONFIG.MAX_PARTICLES - this.particles.length;
+        const particleCount = Math.min(10, availableSlots);
+
+        if (particleCount <= 0) return;
+
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 / particleCount) * i;
+            const speed = 60 + Math.random() * 60;
 
             this.particles.push({
-                x, y,
+                x,
+                y,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
-                radius: 3 + Math.random() * 3,
+                radius: 2 + Math.random() * 3,
                 color,
                 alpha: 1,
                 update(dt) {
                     this.x += this.vx * dt;
                     this.y += this.vy * dt;
-                    this.alpha -= dt * 2;
-                    this.vx *= 0.98;
-                    this.vy *= 0.98;
+                    this.alpha -= dt * 3;
+                    this.vx *= 0.95;
+                    this.vy *= 0.95;
                 }
             });
         }
@@ -661,21 +1219,25 @@ class RavanaGame {
             power: '#f39c12'
         };
 
-        for (let i = 0; i < 8; i++) {
-            const angle = (Math.PI * 2 / 8) * i;
+        const availableSlots = GAME_CONFIG.MAX_PARTICLES - this.particles.length;
+        const particleCount = Math.min(6, availableSlots);
+
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 / particleCount) * i;
 
             this.particles.push({
-                x, y,
-                vx: Math.cos(angle) * 50,
-                vy: Math.sin(angle) * 50 - 50,
-                radius: 4,
-                color: colors[type],
+                x,
+                y,
+                vx: Math.cos(angle) * 40,
+                vy: Math.sin(angle) * 40 - 30,
+                radius: 3,
+                color: colors[type] || '#ffffff',
                 alpha: 1,
                 update(dt) {
                     this.x += this.vx * dt;
                     this.y += this.vy * dt;
-                    this.vy += 100 * dt;
-                    this.alpha -= dt * 2;
+                    this.vy += 80 * dt;
+                    this.alpha -= dt * 2.5;
                 }
             });
         }
@@ -697,68 +1259,114 @@ class RavanaGame {
         `;
 
         document.body.appendChild(flash);
-        setTimeout(() => flash.remove(), 300);
+
+        setTimeout(() => {
+            if (flash.parentNode) {
+                flash.parentNode.removeChild(flash);
+            }
+        }, 300);
     }
 
     // ============================================
     // Rendering
     // ============================================
     render() {
+        const ctx = this.ctx;
+
         // Clear canvas
-        this.ctx.fillStyle = this.getLevelBackground();
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.fillStyle = this.getLevelBackground();
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         // Draw grid pattern
         this.drawGrid();
 
         // Draw powerups
-        this.powerups.forEach(powerup => this.drawPowerup(powerup));
+        for (const powerup of this.powerups) {
+            if (powerup) this.drawPowerup(powerup);
+        }
 
-        // Draw particles (behind entities)
-        this.particles.forEach(particle => this.drawParticle(particle));
+        // Draw particles
+        for (const particle of this.particles) {
+            if (particle) this.drawParticle(particle);
+        }
 
         // Draw bullets
-        this.bullets.forEach(bullet => bullet.render(this.ctx));
-        this.enemyBullets.forEach(bullet => bullet.render(this.ctx));
+        for (const bullet of this.bullets) {
+            if (bullet) bullet.render(ctx);
+        }
+        for (const bullet of this.enemyBullets) {
+            if (bullet) bullet.render(ctx);
+        }
 
         // Draw enemies
-        this.enemies.forEach(enemy => enemy.render(this.ctx));
+        for (const enemy of this.enemies) {
+            if (enemy) enemy.render(ctx);
+        }
 
         // Draw player
         if (this.player) {
-            this.player.render(this.ctx, this.mouse);
+            this.player.render(ctx, this.mouse);
         }
+    }
+
+    renderDebugInfo() {
+        const ctx = this.ctx;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(10, this.canvas.height - 120, 200, 110);
+
+        ctx.fillStyle = '#00ff00';
+        ctx.font = '12px monospace';
+
+        const debugLines = [
+            `FPS: ${this.fps}`,
+            `State: ${this.gameState}`,
+            `Enemies: ${this.enemies.length}/${GAME_CONFIG.MAX_ENEMIES}`,
+            `Bullets: ${this.bullets.length}/${GAME_CONFIG.MAX_BULLETS}`,
+            `E.Bullets: ${this.enemyBullets.length}/${GAME_CONFIG.MAX_ENEMY_BULLETS}`,
+            `Particles: ${this.particles.length}/${GAME_CONFIG.MAX_PARTICLES}`,
+            `Wave: ${this.wave}/${this.totalWaves}`,
+            `Pending: ${this.pendingEnemies}`
+        ];
+
+        debugLines.forEach((line, index) => {
+            ctx.fillText(line, 20, this.canvas.height - 100 + index * 13);
+        });
+
+        ctx.restore();
     }
 
     getLevelBackground() {
         const colors = [
-            '#1a1a2e', // Sigiriya - Dark blue
-            '#1a2e1a', // Anuradhapura - Dark green
-            '#2e1a1a', // Polonnaruwa - Dark red
-            '#1a1a1a', // Kandy - Pure dark
-            '#2e1a2e'  // Ravana Cave - Dark purple
+            '#1a1a2e',
+            '#1a2e1a',
+            '#2e1a1a',
+            '#1a1a1a',
+            '#2e1a2e'
         ];
         return colors[this.currentLevel - 1] || colors[0];
     }
 
     drawGrid() {
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-        this.ctx.lineWidth = 1;
+        const ctx = this.ctx;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        ctx.lineWidth = 1;
 
         const gridSize = 50;
 
         for (let x = 0; x < this.canvas.width; x += gridSize) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(x, 0);
-            this.ctx.lineTo(x, this.canvas.height);
-            this.ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, this.canvas.height);
+            ctx.stroke();
         }
 
         for (let y = 0; y < this.canvas.height; y += gridSize) {
-            this.ctx.beginPath();
-            this.ctx.moveTo(0, y);
-            this.ctx.lineTo(this.canvas.width, y);
-            this.ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(this.canvas.width, y);
+            ctx.stroke();
         }
     }
 
@@ -772,15 +1380,13 @@ class RavanaGame {
 
         this.ctx.save();
 
-        // Glow effect
         this.ctx.shadowColor = this.getPowerupColor(powerup.type);
-        this.ctx.shadowBlur = 20;
+        this.ctx.shadowBlur = 15;
 
-        // Draw icon
         this.ctx.font = '24px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(icons[powerup.type], powerup.x, powerup.displayY || powerup.y);
+        this.ctx.fillText(icons[powerup.type] || '?', powerup.x, powerup.displayY || powerup.y);
 
         this.ctx.restore();
     }
@@ -792,12 +1398,14 @@ class RavanaGame {
             shield: '#2ecc71',
             power: '#f39c12'
         };
-        return colors[type];
+        return colors[type] || '#ffffff';
     }
 
     drawParticle(particle) {
+        if (particle.alpha <= 0) return;
+
         this.ctx.save();
-        this.ctx.globalAlpha = particle.alpha;
+        this.ctx.globalAlpha = Math.max(0, particle.alpha);
         this.ctx.fillStyle = particle.color;
         this.ctx.beginPath();
         this.ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
@@ -812,23 +1420,28 @@ class RavanaGame {
         if (!this.player) return;
 
         // Health bar
-        const healthPercent = (this.player.health / this.player.maxHealth) * 100;
-        document.getElementById('health-fill').style.width = healthPercent + '%';
-        document.getElementById('health-text').textContent =
-            `${Math.ceil(this.player.health)}/${this.player.maxHealth}`;
+        const healthPercent = Math.max(0, (this.player.health / this.player.maxHealth) * 100);
+        const healthFill = document.getElementById('health-fill');
+        const healthText = document.getElementById('health-text');
+
+        if (healthFill) healthFill.style.width = healthPercent + '%';
+        if (healthText) healthText.textContent = `${Math.ceil(Math.max(0, this.player.health))}/${this.player.maxHealth}`;
 
         // Lives
-        document.getElementById('lives-display').textContent = '🦁'.repeat(this.lives);
+        const livesDisplay = document.getElementById('lives-display');
+        if (livesDisplay) livesDisplay.textContent = '🦁'.repeat(Math.max(0, this.lives));
 
         // Score
-        document.getElementById('score').textContent = this.score;
+        const scoreDisplay = document.getElementById('score');
+        if (scoreDisplay) scoreDisplay.textContent = this.score;
 
         // Ammo
-        document.getElementById('ammo').textContent =
-            `${this.player.ammo}/${this.player.maxAmmo}`;
+        const ammoDisplay = document.getElementById('ammo');
+        if (ammoDisplay) ammoDisplay.textContent = `${this.player.ammo}/${this.player.maxAmmo}`;
 
         // Special ability
-        document.getElementById('special-fill').style.width = this.player.specialCharge + '%';
+        const specialFill = document.getElementById('special-fill');
+        if (specialFill) specialFill.style.width = Math.min(100, this.player.specialCharge) + '%';
     }
 }
 
@@ -836,10 +1449,11 @@ class RavanaGame {
 // Start Game
 // ============================================
 window.addEventListener('DOMContentLoaded', () => {
+    console.log('🎮 Initializing Ravana Battle...');
     window.game = new RavanaGame();
 });
 
-// Add flash animation
+// Add flash animation CSS
 const style = document.createElement('style');
 style.textContent = `
     @keyframes flashFade {
