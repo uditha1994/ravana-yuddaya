@@ -1084,32 +1084,23 @@ class RavanaGame {
         }
 
         // Handle mobile input
-        if (this.mobileControls.isMobile && this.mobileControls.isEnabled) {
+        if (this.mobileControls && this.mobileControls.isMobile && this.mobileControls.isEnabled) {
             const movement = this.mobileControls.getMovement();
-            const aim = this.mobileControls.getAimPosition();
 
-            // Apply movement
+            // Apply movement from joystick
             if (movement.distance > 0.1) {
                 this.player.velocityX = movement.x * this.player.speed;
                 this.player.velocityY = movement.y * this.player.speed;
             } else {
-                this.player.velocityX = 0;
-                this.player.velocityY = 0;
+                this.player.velocityX *= 0.9; // Smooth stop
+                this.player.velocityY *= 0.9;
             }
 
-            // Apply aim
-            if (aim.active) {
-                this.player.aimX = aim.x;
-                this.player.aimY = aim.y;
-            }
+            // Update ammo display on mobile
+            this.mobileControls.updateAmmoDisplay(this.player.ammo, this.player.maxAmmo);
 
-            // Handle continuous fire
-            if (this.mobileControls.isFirePressed()) {
-                this.player.shoot();
-            }
-
-            // Update special button state
-            this.mobileControls.updateSpecialReady(this.player.specialReady);
+            // Update special ready state
+            this.mobileControls.updateSpecialReady(this.player.specialCharge >= 100);
         }
 
         // Update player
@@ -2020,11 +2011,11 @@ class RavanaGame {
                 english: '💀 Game Over',
                 both: '💀 ක්‍රීඩාව අවසානයි'
             },
-            '.gameover-container p': {
-                sinhala: 'නැවත උත්සාහ කරන්න',
-                english: 'Try Again',
-                both: 'Game Over'
-            }
+            // '.gameover-container p': {
+            //     sinhala: 'නැවත උත්සාහ කරන්න',
+            //     english: 'Try Again',
+            //     both: 'Game Over'
+            // }
         };
 
         Object.keys(headings).forEach(selector => {

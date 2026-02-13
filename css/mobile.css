@@ -1,249 +1,161 @@
-/* ============================================
-   MOBILE CONTROLS - Ravana Yuddaya
-   ============================================ */
-
-/* Mobile Detection & Base Styles */
-.mobile-only {
-    display: none;
-}
-
-/* Show mobile controls only on touch devices */
-@media (pointer: coarse),
-(max-width: 768px) {
-    .mobile-only {
-        display: block;
-    }
-
-    .desktop-only {
-        display: none;
-    }
-}
-
-/* ============================================
-   VIRTUAL JOYSTICK
-   ============================================ */
+/* Mobile Detection */
 #mobile-controls {
     display: none;
     position: fixed;
-    bottom: 0;
+    top: 0;
     left: 0;
     right: 0;
-    top: 0;
+    bottom: 0;
     pointer-events: none;
     z-index: 1000;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
 }
 
 #mobile-controls.active {
     display: block;
 }
 
-/* Joystick Container - Left Side */
+/* ============================================
+   MOVEMENT JOYSTICK - Left Side
+   ============================================ */
 #joystick-zone {
     position: absolute;
-    bottom: 20px;
-    left: 20px;
-    width: 150px;
-    height: 150px;
+    bottom: 30px;
+    left: 30px;
+    width: 140px;
+    height: 140px;
     pointer-events: auto;
+    touch-action: none;
 }
 
 #joystick-base {
     position: absolute;
     width: 120px;
     height: 120px;
-    background: radial-gradient(circle, rgba(139, 69, 19, 0.6) 0%, rgba(139, 69, 19, 0.3) 70%, transparent 100%);
-    border: 3px solid rgba(255, 215, 0, 0.5);
+    background: radial-gradient(circle,
+            rgba(139, 69, 19, 0.8) 0%,
+            rgba(139, 69, 19, 0.4) 60%,
+            rgba(139, 69, 19, 0.2) 100%);
+    border: 3px solid rgba(255, 215, 0, 0.6);
     border-radius: 50%;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
     box-shadow:
-        0 0 20px rgba(255, 215, 0, 0.3),
-        inset 0 0 30px rgba(0, 0, 0, 0.3);
+        0 0 30px rgba(255, 215, 0, 0.3),
+        inset 0 0 40px rgba(0, 0, 0, 0.4);
 }
 
+/* Direction indicators */
 #joystick-base::before {
     content: '';
     position: absolute;
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 10 L50 30 M50 70 L50 90 M10 50 L30 50 M70 50 L90 50' stroke='rgba(255,215,0,0.3)' stroke-width='2'/%3E%3C/svg%3E") center/contain no-repeat;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 15 L50 30 M50 70 L50 85 M15 50 L30 50 M70 50 L85 50' stroke='rgba(255,215,0,0.4)' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 
 #joystick-thumb {
     position: absolute;
-    width: 50px;
-    height: 50px;
-    background: radial-gradient(circle, #FFD700 0%, #B8860B 100%);
-    border: 2px solid #FFF;
+    width: 55px;
+    height: 55px;
+    background: radial-gradient(circle at 30% 30%, #FFE55C 0%, #FFD700 40%, #B8860B 100%);
+    border: 3px solid rgba(255, 255, 255, 0.8);
     border-radius: 50%;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
     box-shadow:
-        0 4px 15px rgba(0, 0, 0, 0.4),
-        inset 0 2px 5px rgba(255, 255, 255, 0.3);
-    transition: transform 0.05s ease-out;
+        0 6px 20px rgba(0, 0, 0, 0.5),
+        inset 0 -3px 10px rgba(0, 0, 0, 0.3),
+        inset 0 3px 10px rgba(255, 255, 255, 0.4);
+    transition: box-shadow 0.1s ease;
 }
 
 #joystick-thumb.active {
-    background: radial-gradient(circle, #FFF8DC 0%, #FFD700 100%);
+    background: radial-gradient(circle at 30% 30%, #FFFFFF 0%, #FFE55C 30%, #FFD700 100%);
     box-shadow:
-        0 0 20px rgba(255, 215, 0, 0.8),
-        0 4px 15px rgba(0, 0, 0, 0.4);
+        0 0 30px rgba(255, 215, 0, 0.9),
+        0 6px 20px rgba(0, 0, 0, 0.5),
+        inset 0 -3px 10px rgba(0, 0, 0, 0.3);
 }
 
 /* ============================================
-   ACTION BUTTONS - Right Side
+   AIM JOYSTICK - Right Side (NEW)
    ============================================ */
-#action-buttons {
+#aim-joystick-zone {
     position: absolute;
-    bottom: 20px;
-    right: 20px;
+    bottom: 30px;
+    right: 180px;
+    width: 120px;
+    height: 120px;
     pointer-events: auto;
+    touch-action: none;
 }
 
-.action-btn {
+#aim-joystick-base {
     position: absolute;
-    width: 70px;
-    height: 70px;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle,
+            rgba(220, 20, 60, 0.6) 0%,
+            rgba(220, 20, 60, 0.3) 60%,
+            rgba(220, 20, 60, 0.1) 100%);
+    border: 3px solid rgba(255, 99, 71, 0.7);
     border-radius: 50%;
-    border: 3px solid rgba(255, 215, 0, 0.7);
-    font-size: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.1s ease;
-    box-shadow:
-        0 4px 15px rgba(0, 0, 0, 0.4),
-        inset 0 2px 10px rgba(255, 255, 255, 0.1);
-    -webkit-tap-highlight-color: transparent;
-    user-select: none;
-}
-
-.action-btn:active,
-.action-btn.pressed {
-    transform: scale(0.9);
-    box-shadow:
-        0 2px 5px rgba(0, 0, 0, 0.4),
-        inset 0 2px 15px rgba(0, 0, 0, 0.3);
-}
-
-/* Fire Button - Main Attack */
-#btn-fire {
-    bottom: 40px;
-    right: 40px;
-    width: 90px;
-    height: 90px;
-    background: radial-gradient(circle, #DC143C 0%, #8B0000 100%);
-    font-size: 36px;
-    border-color: #FF6347;
-}
-
-#btn-fire:active,
-#btn-fire.pressed {
-    background: radial-gradient(circle, #FF4500 0%, #DC143C 100%);
-    box-shadow:
-        0 0 30px rgba(255, 69, 0, 0.8),
-        inset 0 2px 15px rgba(0, 0, 0, 0.3);
-}
-
-/* Reload Button */
-#btn-reload-mobile {
-    bottom: 140px;
-    right: 100px;
-    width: 60px;
-    height: 60px;
-    background: radial-gradient(circle, #4169E1 0%, #191970 100%);
-    font-size: 24px;
-}
-
-#btn-reload-mobile:active {
-    background: radial-gradient(circle, #6495ED 0%, #4169E1 100%);
-}
-
-/* Special Attack Button */
-#btn-special-mobile {
-    bottom: 140px;
-    right: 20px;
-    width: 60px;
-    height: 60px;
-    background: radial-gradient(circle, #9932CC 0%, #4B0082 100%);
-    font-size: 24px;
-}
-
-#btn-special-mobile:active {
-    background: radial-gradient(circle, #BA55D3 0%, #9932CC 100%);
-}
-
-#btn-special-mobile.ready {
-    animation: specialReady 1s ease-in-out infinite;
-}
-
-@keyframes specialReady {
-
-    0%,
-    100% {
-        box-shadow: 0 0 20px rgba(153, 50, 204, 0.5);
-    }
-
-    50% {
-        box-shadow: 0 0 40px rgba(153, 50, 204, 1);
-    }
-}
-
-/* ============================================
-   TOP CONTROL BAR
-   ============================================ */
-#mobile-top-bar {
-    position: absolute;
-    top: 10px;
     left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 15px;
-    pointer-events: auto;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow:
+        0 0 25px rgba(255, 99, 71, 0.3),
+        inset 0 0 30px rgba(0, 0, 0, 0.4);
 }
 
-.top-btn {
-    width: 50px;
-    height: 50px;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.7);
-    border: 2px solid rgba(255, 215, 0, 0.5);
-    font-size: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
+#aim-joystick-base::after {
+    content: '🎯';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 20px;
+    opacity: 0.4;
 }
 
-.top-btn:active {
-    background: rgba(255, 215, 0, 0.3);
+#aim-joystick-thumb {
+    position: absolute;
+    width: 45px;
+    height: 45px;
+    background: radial-gradient(circle at 30% 30%, #FF6B6B 0%, #DC143C 50%, #8B0000 100%);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow:
+        0 4px 15px rgba(0, 0, 0, 0.5),
+        inset 0 2px 8px rgba(255, 255, 255, 0.3);
+}
+
+#aim-joystick-thumb.active {
+    background: radial-gradient(circle at 30% 30%, #FFFFFF 0%, #FF6B6B 30%, #DC143C 100%);
+    box-shadow:
+        0 0 25px rgba(255, 99, 71, 0.9),
+        0 4px 15px rgba(0, 0, 0, 0.5);
 }
 
 /* ============================================
-   AIM ZONE (Right side of screen)
+   CROSSHAIR
    ============================================ */
-#aim-zone {
-    position: absolute;
-    top: 80px;
-    right: 0;
-    bottom: 180px;
-    width: 50%;
-    pointer-events: auto;
-}
-
-/* Aim Crosshair */
 #mobile-crosshair {
     position: fixed;
-    width: 40px;
-    height: 40px;
+    width: 50px;
+    height: 50px;
     pointer-events: none;
     z-index: 1001;
+    transform: translate(-50%, -50%);
     display: none;
 }
 
@@ -251,36 +163,187 @@
     display: block;
 }
 
-#mobile-crosshair::before,
-#mobile-crosshair::after {
-    content: '';
+.crosshair-ring {
     position: absolute;
-    background: rgba(255, 0, 0, 0.8);
-}
-
-#mobile-crosshair::before {
-    width: 2px;
-    height: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-}
-
-#mobile-crosshair::after {
     width: 100%;
-    height: 2px;
-    top: 50%;
-    transform: translateY(-50%);
+    height: 100%;
+    border: 2px solid rgba(255, 0, 0, 0.8);
+    border-radius: 50%;
+    animation: crosshairPulse 1s ease-in-out infinite;
 }
 
-#mobile-crosshair .dot {
+.crosshair-dot {
     position: absolute;
-    width: 6px;
-    height: 6px;
-    background: red;
+    width: 8px;
+    height: 8px;
+    background: #FF0000;
     border-radius: 50%;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+}
+
+@keyframes crosshairPulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+}
+
+/* ============================================
+   ACTION BUTTONS - Right Side
+   ============================================ */
+#action-buttons {
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    pointer-events: auto;
+}
+
+.action-btn {
+    position: absolute;
+    border-radius: 50%;
+    border: 3px solid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow:
+        0 6px 20px rgba(0, 0, 0, 0.5),
+        inset 0 3px 15px rgba(255, 255, 255, 0.2);
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    touch-action: none;
+}
+
+.action-btn:active,
+.action-btn.pressed {
+    transform: scale(0.9);
+    box-shadow:
+        0 2px 10px rgba(0, 0, 0, 0.5),
+        inset 0 3px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* Fire Button - Big and prominent */
+#btn-fire {
+    bottom: 20px;
+    right: 20px;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle at 30% 30%, #FF6B6B 0%, #DC143C 50%, #8B0000 100%);
+    border-color: #FF6347;
+    font-size: 40px;
+}
+
+#btn-fire.pressed {
+    background: radial-gradient(circle at 30% 30%, #FFFFFF 0%, #FF4500 40%, #DC143C 100%);
+    box-shadow:
+        0 0 40px rgba(255, 69, 0, 0.9),
+        inset 0 3px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* Small buttons */
+.small-btn {
+    width: 60px;
+    height: 60px;
+    font-size: 24px;
+}
+
+/* Reload Button */
+#btn-reload-mobile {
+    bottom: 130px;
+    right: 90px;
+    background: radial-gradient(circle at 30% 30%, #6495ED 0%, #4169E1 50%, #191970 100%);
+    border-color: #6495ED;
+}
+
+#btn-reload-mobile.pressed {
+    background: radial-gradient(circle at 30% 30%, #FFFFFF 0%, #6495ED 40%, #4169E1 100%);
+}
+
+/* Special Attack Button */
+#btn-special-mobile {
+    bottom: 130px;
+    right: 20px;
+    background: radial-gradient(circle at 30% 30%, #BA55D3 0%, #9932CC 50%, #4B0082 100%);
+    border-color: #BA55D3;
+}
+
+#btn-special-mobile.pressed {
+    background: radial-gradient(circle at 30% 30%, #FFFFFF 0%, #BA55D3 40%, #9932CC 100%);
+}
+
+#btn-special-mobile.ready {
+    animation: specialReady 0.8s ease-in-out infinite;
+    border-color: #FFD700;
+}
+
+@keyframes specialReady {
+
+    0%,
+    100% {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.5),
+            0 6px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    50% {
+        box-shadow: 0 0 40px rgba(255, 215, 0, 1),
+            0 6px 20px rgba(0, 0, 0, 0.5);
+    }
+}
+
+/* ============================================
+   TOP BAR
+   ============================================ */
+#mobile-top-bar {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    pointer-events: auto;
+}
+
+.top-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid rgba(255, 215, 0, 0.6);
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: all 0.2s ease;
+}
+
+.top-btn:active {
+    background: rgba(255, 215, 0, 0.4);
+    transform: scale(0.95);
+}
+
+#mobile-ammo-display {
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid rgba(255, 215, 0, 0.6);
+    border-radius: 12px;
+    padding: 8px 15px;
+    font-size: 16px;
+    color: #FFD700;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
 }
 
 /* ============================================
@@ -288,95 +351,51 @@
    ============================================ */
 #auto-fire-toggle {
     position: absolute;
-    bottom: 30px;
-    right: 150px;
+    bottom: 200px;
+    right: 30px;
+    pointer-events: auto;
+}
+
+#auto-fire-toggle label {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 5px;
-    pointer-events: auto;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(255, 215, 0, 0.4);
+    transition: all 0.2s ease;
 }
 
 #auto-fire-toggle input {
     display: none;
 }
 
-#auto-fire-toggle label {
-    width: 50px;
-    height: 50px;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.7);
-    border: 2px solid rgba(255, 215, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-    cursor: pointer;
+#auto-fire-toggle .toggle-icon {
+    font-size: 28px;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
 }
 
-#auto-fire-toggle input:checked+label {
-    background: rgba(255, 69, 0, 0.7);
+#auto-fire-toggle .toggle-text {
+    font-size: 11px;
+    color: #FFD700;
+    opacity: 0.6;
+}
+
+#auto-fire-toggle input:checked+.toggle-icon {
+    opacity: 1;
+}
+
+#auto-fire-toggle input:checked~.toggle-text {
+    opacity: 1;
+}
+
+#auto-fire-toggle:has(input:checked) label {
+    background: rgba(255, 69, 0, 0.5);
     border-color: #FF4500;
-}
-
-#auto-fire-toggle span {
-    font-size: 10px;
-    color: #FFD700;
-    text-shadow: 1px 1px 2px black;
-}
-
-/* ============================================
-   MOBILE HUD ADJUSTMENTS
-   ============================================ */
-@media (pointer: coarse),
-(max-width: 768px) {
-    #game-hud {
-        padding: 5px 10px;
-        font-size: 12px;
-    }
-
-    .health-container {
-        width: 80px;
-    }
-
-    .hud-center {
-        display: none;
-        /* Hide center on mobile - too crowded */
-    }
-
-    #special-bar {
-        bottom: 180px;
-        left: 20px;
-        right: auto;
-        width: 120px;
-    }
-
-    #weapon-display {
-        display: none;
-        /* Hide on mobile */
-    }
-
-    .score-display {
-        font-size: 14px;
-    }
-
-    #score {
-        font-size: 18px;
-    }
-}
-
-/* ============================================
-   BUTTON LABELS
-   ============================================ */
-.btn-label {
-    position: absolute;
-    bottom: -20px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 10px;
-    color: #FFD700;
-    text-shadow: 1px 1px 2px black;
-    white-space: nowrap;
 }
 
 /* ============================================
@@ -389,20 +408,20 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.95);
-    z-index: 9999;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    z-index: 10000;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     color: #FFD700;
     text-align: center;
-    padding: 20px;
+    padding: 30px;
 }
 
 #orientation-warning .rotate-icon {
-    font-size: 80px;
+    font-size: 100px;
     animation: rotatePhone 2s ease-in-out infinite;
-    margin-bottom: 20px;
+    margin-bottom: 30px;
 }
 
 @keyframes rotatePhone {
@@ -412,18 +431,23 @@
         transform: rotate(0deg);
     }
 
-    50% {
+    25% {
+        transform: rotate(45deg);
+    }
+
+    75% {
         transform: rotate(90deg);
     }
 }
 
 #orientation-warning h2 {
-    font-size: 24px;
-    margin-bottom: 10px;
+    font-size: 28px;
+    margin-bottom: 15px;
+    text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
 }
 
 #orientation-warning p {
-    font-size: 16px;
+    font-size: 18px;
     opacity: 0.8;
 }
 
@@ -431,17 +455,57 @@
     #orientation-warning {
         display: flex;
     }
+
+    #mobile-controls.active>*:not(#orientation-warning) {
+        display: none;
+    }
 }
 
 /* ============================================
-   TOUCH FEEDBACK
+   MOBILE HUD ADJUSTMENTS
+   ============================================ */
+@media (pointer: coarse),
+(max-width: 768px) {
+    #game-hud {
+        padding: 8px 15px;
+        font-size: 14px;
+    }
+
+    .hud-center {
+        display: none;
+    }
+
+    #special-bar {
+        display: none;
+        /* Use button glow instead */
+    }
+
+    #weapon-display {
+        display: none;
+    }
+
+    .health-container {
+        width: 100px;
+    }
+
+    .score-display {
+        font-size: 16px;
+    }
+
+    #score {
+        font-size: 20px;
+    }
+}
+
+/* ============================================
+   TOUCH FEEDBACK EFFECTS
    ============================================ */
 .touch-ripple {
     position: fixed;
-    width: 50px;
-    height: 50px;
+    width: 60px;
+    height: 60px;
     border-radius: 50%;
-    background: rgba(255, 215, 0, 0.4);
+    background: rgba(255, 215, 0, 0.5);
     pointer-events: none;
     transform: translate(-50%, -50%) scale(0);
     animation: ripple 0.4s ease-out forwards;
@@ -455,17 +519,7 @@
 }
 
 /* ============================================
-   FULLSCREEN BUTTON
-   ============================================ */
-#btn-fullscreen {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    pointer-events: auto;
-}
-
-/* ============================================
-   MOBILE PAUSE ADJUSTMENTS
+   PAUSE/OVERLAY MOBILE ADJUSTMENTS
    ============================================ */
 @media (max-width: 768px) {
 
@@ -473,38 +527,13 @@
     .complete-container,
     .gameover-container {
         width: 90%;
-        max-width: 350px;
-        padding: 20px;
+        max-width: 380px;
+        padding: 25px;
     }
 
     .menu-btn {
-        padding: 12px 20px;
-        font-size: 14px;
-    }
-
-    .pause-buttons,
-    .complete-buttons,
-    .gameover-buttons {
-        gap: 10px;
-    }
-}
-
-/* ============================================
-   HAPTIC FEEDBACK INDICATOR (Visual)
-   ============================================ */
-.haptic-flash {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.1);
-    pointer-events: none;
-    animation: hapticFlash 0.1s ease-out forwards;
-}
-
-@keyframes hapticFlash {
-    to {
-        opacity: 0;
+        padding: 15px 25px;
+        font-size: 16px;
+        min-height: 50px;
     }
 }
