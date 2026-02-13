@@ -226,6 +226,15 @@ class RavanaGame {
             console.log('Language changed to:', e.target.value);
         });
 
+        document.querySelectorAll('.menu-btn').forEach(btn => {
+            btn.addEventListener('mouseenter', () => {
+                this.audioManager.play('buttonHover', 0.3);
+            });
+            btn.addEventListener('click', () => {
+                this.audioManager.play('buttonClick', 0.5);
+            });
+        });
+
         console.log('UI Events setup complete');
     }
 
@@ -362,6 +371,8 @@ class RavanaGame {
 
         // Update HUD
         this.updateHUD();
+
+        this.audioManager.playMusic('battle');
     }
 
     initializeLevel() {
@@ -507,6 +518,7 @@ class RavanaGame {
                 spawnDelay += delayBetweenEnemies;
             }
         });
+        this.audioManager.play('waveStart');
     }
 
     spawnEnemy(type) {
@@ -638,6 +650,7 @@ class RavanaGame {
 
         this.hideAllOverlays();
         this.showScreen('main-menu');
+        this.audioManager.playMusic('menu');
     }
 
     levelComplete() {
@@ -678,6 +691,8 @@ class RavanaGame {
         }
 
         this.showOverlay('level-complete');
+        this.audioManager.stopMusic();
+        this.audioManager.play('levelComplete');
     }
 
     gameOver() {
@@ -705,6 +720,8 @@ class RavanaGame {
         if (goLevelEl) goLevelEl.textContent = this.currentLevel;
 
         this.showOverlay('game-over');
+        this.audioManager.stopMusic();
+        this.audioManager.play('gameOver');
     }
 
     useSpecialAbility() {
@@ -783,6 +800,7 @@ class RavanaGame {
                     if (bullet) {
                         this.bullets.push(bullet);
                         this.stats.shotsFired++;
+                        this.audioManager.play('shoot');
                     }
                 }
             }
@@ -883,6 +901,7 @@ class RavanaGame {
                 if (bullet) {
                     this.bullets.push(bullet);
                     this.stats.shotsFired++;
+                    this.audioManager.play('shoot');
                 }
             }
         }
@@ -1065,6 +1084,7 @@ class RavanaGame {
                         this.score += enemy.points;
                         this.stats.enemiesKilled++;
                         this.createExplosion(enemy.x, enemy.y, enemy.color);
+                        this.audioManager.play('explosion');
 
                         // Chance to spawn powerup
                         if (Math.random() < 0.2 && this.powerups.length < GAME_CONFIG.MAX_POWERUPS) {
@@ -1088,6 +1108,7 @@ class RavanaGame {
             if (this.checkCollision(bullet, this.player)) {
                 bullet.isActive = false;
                 this.player.takeDamage(bullet.damage);
+                this.audioManager.play('playerHurt');
                 this.handlePlayerDamage();
                 break;
             }
@@ -1119,6 +1140,7 @@ class RavanaGame {
 
             if (this.checkCollision(powerup, this.player)) {
                 this.collectPowerup(powerup);
+                this.audioManager.play('powerup');
                 powerup.isActive = false;
             }
         }
