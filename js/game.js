@@ -8,6 +8,7 @@ import { Bullet } from './bullet.js';
 import { LevelManager, LEVELS } from './levels.js';
 import { UIManager } from './ui.js';
 import { AudioManager } from './audio.js';
+import { MobileControls } from './mobile-controls.js';
 
 // ============================================
 // Game Constants
@@ -92,8 +93,25 @@ class RavanaGame {
         this.fps = 0;
         this.lastFpsUpdate = 0;
 
+        // Mobile controls - Initialize with error handling
+        this.mobileControls = null;
+        this.isPlaying = false;
+        this.isMobileDevice = this.detectMobile();
+
         // Initialize
         this.init();
+    }
+
+    // ============================================
+    // Mobile Detection
+    // ============================================
+    detectMobile() {
+        return (
+            'ontouchstart' in window ||
+            navigator.maxTouchPoints > 0 ||
+            window.matchMedia('(pointer: coarse)').matches ||
+            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+        );
     }
 
     // ============================================
@@ -103,6 +121,9 @@ class RavanaGame {
         this.setupCanvas();
         this.setupEventListeners();
         this.loadSettings();
+
+        // Initialize mobile controls
+        this.initMobileControls();
 
         // Apply saved language on load
         if (this.settings.language) {
@@ -117,6 +138,28 @@ class RavanaGame {
 
         // Debug: Log initialization
         this.log('Game initialized');
+        this.log(`Mobile device detected: ${this.isMobileDevice}`);
+    }
+
+    initMobileControls() {
+        try {
+            this.mobileControls = new MobileControls(this);
+            console.log('📱 Mobile controls initialized successfully');
+            console.log('📱 Is mobile device:', this.mobileControls.isMobile);
+        } catch (error) {
+            console.error('❌ Mobile controls failed to initialize:', error);
+            // Create dummy mobile controls to prevent errors
+            this.mobileControls = {
+                isMobile: false,
+                isEnabled: false,
+                show: () => { console.log('Mobile controls not available'); },
+                hide: () => { },
+                getMovement: () => ({ x: 0, y: 0, distance: 0, angle: 0 }),
+                getAimPosition: () => ({ x: 0, y: 0, active: false }),
+                isFirePressed: () => false,
+                updateSpecialReady: () => { }
+            };
+        }
     }
 
     log(message) {
@@ -145,6 +188,11 @@ class RavanaGame {
         this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
         this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
 
+        // Touch events for canvas (backup for mobile)
+        this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+        this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+        this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+
         // Prevent context menu
         this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -157,6 +205,34 @@ class RavanaGame {
 
         // UI button events
         this.setupUIEvents();
+    }
+
+    // ============================================
+    // Touch Event Handlers (Backup)
+    // ============================================
+    handleTouchStart(e) {
+        if (this.gameState !== 'playing') return;
+        e.preventDefault();
+
+        const touch = e.touches[0];
+        this.mouse.x = touch.clientX;
+        this.mouse.y = touch.clientY;
+        this.mouse.down = true;
+    }
+
+    handleTouchMove(e) {
+        if (this.gameState !== 'playing') return;
+        e.preventDefault();
+
+        const touch = e.touches[0];
+        this.mouse.x = touch.clientX;
+        this.mouse.y = touch.clientY;
+    }
+
+    handleTouchEnd(e) {
+        if (this.gameState !== 'playing') return;
+        e.preventDefault();
+        this.mouse.down = false;
     }
 
     setupUIEvents() {
@@ -366,6 +442,7 @@ class RavanaGame {
 
         // Start game loop
         this.gameState = 'playing';
+        this.isPlaying = true;
         this.lastTime = performance.now();
         this.startGameLoop();
 
@@ -373,6 +450,56 @@ class RavanaGame {
         this.updateHUD();
 
         this.audioManager.playMusic('battle');
+
+        // ========================================
+        // MOBILE CONTROLS - Show if on mobile
+        // ========================================
+        if (this.mobileControls && this.mobileControls.isMobile) {
+            console.log('📱 Showing mobile controls...');
+            this.mobileControls.show();
+        } else if (this.isMobileDevice) {
+            console.log('📱 Mobile device detected but controls not initialized, trying again...');
+            this.initMobileControls();
+            if (this.mobileControls && this.mobileControls.isMobile) {
+                this.mobileControls.show();
+            }
+        }
+    }
+
+    // ============================================
+    // Mobile Callback Methods
+    // ============================================
+    onMobileFire(isFiring) {
+        if (!this.player) return;
+
+        this.player.isShooting = isFiring;
+        if (isFiring && this.player.canShoot()) {
+            const bullet = this.player.shoot(this.mouse.x, this.mouse.y);
+            if (bullet) {
+                this.bullets.push(bullet);
+                this.stats.shotsFired++;
+                this.audioManager.play('shoot');
+            }
+        }
+    }
+
+    onMobileReload() {
+        if (this.player) {
+            this.player.reload();
+            this.audioManager.play('reload');
+        }
+    }
+
+    onMobileSpecial() {
+        this.useSpecialAbility();
+    }
+
+    togglePause() {
+        if (this.gameState === 'paused') {
+            this.resumeGame();
+        } else if (this.gameState === 'playing') {
+            this.pauseGame();
+        }
     }
 
     initializeLevel() {
@@ -441,6 +568,10 @@ class RavanaGame {
         if (this.waveSpawnTimer) {
             clearTimeout(this.waveSpawnTimer);
             this.waveSpawnTimer = null;
+        }
+        if (this.waveSpawnTimeout) {
+            clearTimeout(this.waveSpawnTimeout);
+            this.waveSpawnTimeout = null;
         }
         this.isSpawningWave = false;
         this.pendingEnemies = 0;
@@ -622,6 +753,7 @@ class RavanaGame {
         // Stop game loop first
         this.gameState = 'menu';
         this.isRunning = false;
+        this.isPlaying = false;
 
         if (this.animFrameId) {
             cancelAnimationFrame(this.animFrameId);
@@ -629,10 +761,7 @@ class RavanaGame {
         }
 
         // Clear wave timeout
-        if (this.waveSpawnTimeout) {
-            clearTimeout(this.waveSpawnTimeout);
-            this.waveSpawnTimeout = null;
-        }
+        this.clearWaveTimers();
 
         // Reset wave state
         this.waveActive = false;
@@ -648,6 +777,11 @@ class RavanaGame {
         this.particles = [];
         this.player = null;
 
+        // Hide mobile controls
+        if (this.mobileControls && this.mobileControls.isMobile) {
+            this.mobileControls.hide();
+        }
+
         this.hideAllOverlays();
         this.showScreen('main-menu');
         this.audioManager.playMusic('menu');
@@ -660,15 +794,18 @@ class RavanaGame {
 
         this.gameState = 'levelComplete';
         this.isRunning = false;
+        this.isPlaying = false;
 
         if (this.animFrameId) {
             cancelAnimationFrame(this.animFrameId);
             this.animFrameId = null;
         }
 
-        if (this.waveSpawnTimeout) {
-            clearTimeout(this.waveSpawnTimeout);
-            this.waveSpawnTimeout = null;
+        this.clearWaveTimers();
+
+        // Hide mobile controls
+        if (this.mobileControls && this.mobileControls.isMobile) {
+            this.mobileControls.hide();
         }
 
         // Calculate stats
@@ -702,15 +839,18 @@ class RavanaGame {
 
         this.gameState = 'gameOver';
         this.isRunning = false;
+        this.isPlaying = false;
 
         if (this.animFrameId) {
             cancelAnimationFrame(this.animFrameId);
             this.animFrameId = null;
         }
 
-        if (this.waveSpawnTimeout) {
-            clearTimeout(this.waveSpawnTimeout);
-            this.waveSpawnTimeout = null;
+        this.clearWaveTimers();
+
+        // Hide mobile controls
+        if (this.mobileControls && this.mobileControls.isMobile) {
+            this.mobileControls.hide();
         }
 
         const goScoreEl = document.getElementById('gameover-score');
@@ -789,13 +929,20 @@ class RavanaGame {
             dt = 0.016;
         }
 
+        // ========================================
+        // MOBILE INPUT HANDLING
+        // ========================================
+        if (this.mobileControls && this.mobileControls.isMobile && this.mobileControls.isEnabled) {
+            this.handleMobileInput(dt);
+        }
+
         // Update player
         if (this.player) {
             this.player.update(dt, this.keys, this.mouse);
 
-            // Shooting
-            if (this.mouse.down && this.player.canShoot()) {
-                if (this.bullets.length < 80) {
+            // Desktop shooting (mouse)
+            if (!this.mobileControls?.isMobile && this.mouse.down && this.player.canShoot()) {
+                if (this.bullets.length < GAME_CONFIG.MAX_BULLETS) {
                     const bullet = this.player.shoot(this.mouse.x, this.mouse.y);
                     if (bullet) {
                         this.bullets.push(bullet);
@@ -875,27 +1022,53 @@ class RavanaGame {
         }
 
         // Enforce particle limit
-        while (this.particles.length > 60) {
+        while (this.particles.length > GAME_CONFIG.MAX_PARTICLES) {
             this.particles.shift();
         }
 
         // Check collisions
         this.checkCollisions();
 
-        // Check wave completion - IMPORTANT: This is the key fix
+        // Check wave completion
         this.checkWaveCompletion();
 
         // Update HUD
         this.updateHUD();
     }
 
-    updatePlayer(dt) {
-        if (!this.player) return;
+    // ============================================
+    // Mobile Input Handler
+    // ============================================
+    handleMobileInput(dt) {
+        if (!this.player || !this.mobileControls) return;
 
-        this.player.update(dt, this.keys, this.mouse);
+        const movement = this.mobileControls.getMovement();
+        const aim = this.mobileControls.getAimPosition();
 
-        // Shooting
-        if (this.mouse.down && this.player.canShoot()) {
+        // Apply joystick movement
+        if (movement.distance > 0.1) {
+            // Calculate velocity based on joystick
+            const speed = this.player.speed || 200;
+            this.player.velocityX = movement.x * speed;
+            this.player.velocityY = movement.y * speed;
+
+            // Apply movement
+            this.player.x += this.player.velocityX * dt;
+            this.player.y += this.player.velocityY * dt;
+
+            // Keep player in bounds
+            this.player.x = Math.max(this.player.radius, Math.min(this.canvas.width - this.player.radius, this.player.x));
+            this.player.y = Math.max(this.player.radius, Math.min(this.canvas.height - this.player.radius, this.player.y));
+        }
+
+        // Apply aim position to mouse (for shooting direction)
+        if (aim.active) {
+            this.mouse.x = aim.x;
+            this.mouse.y = aim.y;
+        }
+
+        // Handle continuous fire from mobile
+        if (this.mobileControls.isFirePressed() && this.player.canShoot()) {
             if (this.bullets.length < GAME_CONFIG.MAX_BULLETS) {
                 const bullet = this.player.shoot(this.mouse.x, this.mouse.y);
                 if (bullet) {
@@ -906,110 +1079,9 @@ class RavanaGame {
             }
         }
 
-        // Charge special ability
-        this.player.chargeSpecial(GAME_CONFIG.SPECIAL_CHARGE_RATE * dt);
-    }
-
-    updateBullets(dt) {
-        // Update player bullets
-        for (let i = this.bullets.length - 1; i >= 0; i--) {
-            const bullet = this.bullets[i];
-
-            if (!bullet) {
-                this.bullets.splice(i, 1);
-                continue;
-            }
-
-            bullet.update(dt);
-
-            if (!bullet.isActive || !this.isInBounds(bullet)) {
-                this.bullets.splice(i, 1);
-            }
-        }
-
-        // Update enemy bullets
-        for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
-            const bullet = this.enemyBullets[i];
-
-            if (!bullet) {
-                this.enemyBullets.splice(i, 1);
-                continue;
-            }
-
-            bullet.update(dt);
-
-            if (!bullet.isActive || !this.isInBounds(bullet)) {
-                this.enemyBullets.splice(i, 1);
-            }
-        }
-
-        // Enforce bullet limits
-        while (this.bullets.length > GAME_CONFIG.MAX_BULLETS) {
-            this.bullets.shift();
-        }
-        while (this.enemyBullets.length > GAME_CONFIG.MAX_ENEMY_BULLETS) {
-            this.enemyBullets.shift();
-        }
-    }
-
-    updateEnemies(dt) {
-        for (let i = this.enemies.length - 1; i >= 0; i--) {
-            const enemy = this.enemies[i];
-
-            if (!enemy) {
-                this.enemies.splice(i, 1);
-                continue;
-            }
-
-            enemy.update(dt, this.player);
-
-            if (!enemy.isAlive) {
-                this.enemies.splice(i, 1);
-            }
-        }
-    }
-
-    updatePowerups(dt) {
-        for (let i = this.powerups.length - 1; i >= 0; i--) {
-            const powerup = this.powerups[i];
-
-            if (!powerup) {
-                this.powerups.splice(i, 1);
-                continue;
-            }
-
-            powerup.update(dt);
-
-            if (!powerup.isActive) {
-                this.powerups.splice(i, 1);
-            }
-        }
-
-        // Limit powerups
-        while (this.powerups.length > GAME_CONFIG.MAX_POWERUPS) {
-            this.powerups.shift();
-        }
-    }
-
-    updateParticles(dt) {
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const particle = this.particles[i];
-
-            if (!particle) {
-                this.particles.splice(i, 1);
-                continue;
-            }
-
-            particle.update(dt);
-
-            if (particle.alpha <= 0) {
-                this.particles.splice(i, 1);
-            }
-        }
-
-        // Limit particles
-        while (this.particles.length > GAME_CONFIG.MAX_PARTICLES) {
-            this.particles.shift();
+        // Update special button visual state
+        if (this.mobileControls.updateSpecialReady) {
+            this.mobileControls.updateSpecialReady(this.player.specialCharge >= 100);
         }
     }
 
@@ -1355,6 +1427,39 @@ class RavanaGame {
         if (this.player) {
             this.player.render(ctx, this.mouse);
         }
+
+        // Draw mobile crosshair if aiming
+        if (this.mobileControls?.isMobile && this.mobileControls?.isEnabled) {
+            this.drawMobileCrosshair();
+        }
+    }
+
+    drawMobileCrosshair() {
+        const aim = this.mobileControls.getAimPosition();
+        if (!aim.active) return;
+
+        const ctx = this.ctx;
+        ctx.save();
+
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+        ctx.lineWidth = 2;
+
+        // Draw crosshair
+        const size = 20;
+        ctx.beginPath();
+        ctx.moveTo(aim.x - size, aim.y);
+        ctx.lineTo(aim.x + size, aim.y);
+        ctx.moveTo(aim.x, aim.y - size);
+        ctx.lineTo(aim.x, aim.y + size);
+        ctx.stroke();
+
+        // Draw center dot
+        ctx.fillStyle = 'red';
+        ctx.beginPath();
+        ctx.arc(aim.x, aim.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
     }
 
     renderDebugInfo() {
@@ -1362,7 +1467,7 @@ class RavanaGame {
 
         ctx.save();
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(10, this.canvas.height - 120, 200, 110);
+        ctx.fillRect(10, this.canvas.height - 140, 220, 130);
 
         ctx.fillStyle = '#00ff00';
         ctx.font = '12px monospace';
@@ -1370,16 +1475,17 @@ class RavanaGame {
         const debugLines = [
             `FPS: ${this.fps}`,
             `State: ${this.gameState}`,
+            `Mobile: ${this.mobileControls?.isMobile ? 'YES' : 'NO'}`,
+            `Controls Active: ${this.mobileControls?.isEnabled ? 'YES' : 'NO'}`,
             `Enemies: ${this.enemies.length}/${GAME_CONFIG.MAX_ENEMIES}`,
             `Bullets: ${this.bullets.length}/${GAME_CONFIG.MAX_BULLETS}`,
-            `E.Bullets: ${this.enemyBullets.length}/${GAME_CONFIG.MAX_ENEMY_BULLETS}`,
             `Particles: ${this.particles.length}/${GAME_CONFIG.MAX_PARTICLES}`,
             `Wave: ${this.wave}/${this.totalWaves}`,
-            `Pending: ${this.pendingEnemies}`
+            `Wave Active: ${this.waveActive}`
         ];
 
         debugLines.forEach((line, index) => {
-            ctx.fillText(line, 20, this.canvas.height - 100 + index * 13);
+            ctx.fillText(line, 20, this.canvas.height - 120 + index * 13);
         });
 
         ctx.restore();
@@ -1853,6 +1959,14 @@ class RavanaGame {
                 }
             }
         });
+    }
+
+    returnToMenu() {
+        this.isPlaying = false;
+
+        if (this.mobileControls && this.mobileControls.isMobile) {
+            this.mobileControls.hide();
+        }
     }
 }
 
