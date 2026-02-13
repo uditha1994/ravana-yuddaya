@@ -1,9 +1,3 @@
-// ============================================
-// Enhanced Enemy Classes - යක්ෂ සතුරන්
-// Bug-Free & Memory Optimized Version
-// ============================================
-
-// Enemy type configurations
 export const EnemyTypes = {
     yaksha: {
         name: 'යක්ෂයා',
@@ -112,7 +106,6 @@ const DEFAULT_COLORS = {
 
 export class Enemy {
     constructor(x, y, type, game) {
-        // Validate game reference
         if (!game) {
             console.error('Enemy: game reference is null!');
         }
@@ -125,7 +118,6 @@ export class Enemy {
         // Get config with fallback to yaksha
         const config = EnemyTypes[this.type] || EnemyTypes.yaksha;
 
-        // Copy properties with defaults
         this.name = config.name || 'Enemy';
         this.nameEn = config.nameEn || 'Enemy';
         this.maxHealth = config.health || 50;
@@ -154,17 +146,14 @@ export class Enemy {
         this.behaviorTimer = 0;
         this.currentBehavior = 'chase';
 
-        // Animation - use simple values
         this.animTime = 0;
         this.walkCycle = 0;
         this.hitFlash = 0;
         this.spawnAnimation = 1;
 
-        // Floating parts - limited count
         this.floatingParts = [];
         this.initFloatingParts();
 
-        // Boss specific
         this.phase = 1;
         this.headAngles = [];
 

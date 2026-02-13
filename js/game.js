@@ -93,25 +93,12 @@ class RavanaGame {
         this.fps = 0;
         this.lastFpsUpdate = 0;
 
-        // Mobile controls - Initialize with error handling
-        this.mobileControls = null;
+        // Initialize mobile controls
+        this.mobileControls = new MobileControls(this);
         this.isPlaying = false;
-        this.isMobileDevice = this.detectMobile();
 
         // Initialize
         this.init();
-    }
-
-    // ============================================
-    // Mobile Detection
-    // ============================================
-    detectMobile() {
-        return (
-            'ontouchstart' in window ||
-            navigator.maxTouchPoints > 0 ||
-            window.matchMedia('(pointer: coarse)').matches ||
-            /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-        );
     }
 
     // ============================================
@@ -121,9 +108,6 @@ class RavanaGame {
         this.setupCanvas();
         this.setupEventListeners();
         this.loadSettings();
-
-        // Initialize mobile controls
-        this.initMobileControls();
 
         // Apply saved language on load
         if (this.settings.language) {
@@ -138,28 +122,6 @@ class RavanaGame {
 
         // Debug: Log initialization
         this.log('Game initialized');
-        this.log(`Mobile device detected: ${this.isMobileDevice}`);
-    }
-
-    initMobileControls() {
-        try {
-            this.mobileControls = new MobileControls(this);
-            console.log('📱 Mobile controls initialized successfully');
-            console.log('📱 Is mobile device:', this.mobileControls.isMobile);
-        } catch (error) {
-            console.error('❌ Mobile controls failed to initialize:', error);
-            // Create dummy mobile controls to prevent errors
-            this.mobileControls = {
-                isMobile: false,
-                isEnabled: false,
-                show: () => { console.log('Mobile controls not available'); },
-                hide: () => { },
-                getMovement: () => ({ x: 0, y: 0, distance: 0, angle: 0 }),
-                getAimPosition: () => ({ x: 0, y: 0, active: false }),
-                isFirePressed: () => false,
-                updateSpecialReady: () => { }
-            };
-        }
     }
 
     log(message) {
@@ -188,11 +150,6 @@ class RavanaGame {
         this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
         this.canvas.addEventListener('mouseup', (e) => this.handleMouseUp(e));
 
-        // Touch events for canvas (backup for mobile)
-        this.canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
-        this.canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
-        this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
-
         // Prevent context menu
         this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -205,34 +162,6 @@ class RavanaGame {
 
         // UI button events
         this.setupUIEvents();
-    }
-
-    // ============================================
-    // Touch Event Handlers (Backup)
-    // ============================================
-    handleTouchStart(e) {
-        if (this.gameState !== 'playing') return;
-        e.preventDefault();
-
-        const touch = e.touches[0];
-        this.mouse.x = touch.clientX;
-        this.mouse.y = touch.clientY;
-        this.mouse.down = true;
-    }
-
-    handleTouchMove(e) {
-        if (this.gameState !== 'playing') return;
-        e.preventDefault();
-
-        const touch = e.touches[0];
-        this.mouse.x = touch.clientX;
-        this.mouse.y = touch.clientY;
-    }
-
-    handleTouchEnd(e) {
-        if (this.gameState !== 'playing') return;
-        e.preventDefault();
-        this.mouse.down = false;
     }
 
     setupUIEvents() {
@@ -344,10 +273,22 @@ class RavanaGame {
     handleKeyDown(e) {
         this.keys[e.code] = true;
 
-        if (this.gameState === 'playing') {
-            if (e.code === 'Escape') {
+        // ESC key handling
+        if (e.code === 'Escape') {
+            e.preventDefault();
+
+            console.log('ESC pressed, current state:', this.gameState);
+
+            if (this.gameState === 'playing') {
                 this.pauseGame();
+            } else if (this.gameState === 'paused') {
+                this.resumeGame();
             }
+            return;
+        }
+
+        // Only handle game keys when playing
+        if (this.gameState === 'playing') {
             if (e.code === 'KeyR' && this.player) {
                 this.player.reload();
             }
@@ -355,10 +296,6 @@ class RavanaGame {
                 this.useSpecialAbility();
                 e.preventDefault();
             }
-        }
-
-        if (this.gameState === 'paused' && e.code === 'Escape') {
-            this.resumeGame();
         }
     }
 
@@ -442,7 +379,6 @@ class RavanaGame {
 
         // Start game loop
         this.gameState = 'playing';
-        this.isPlaying = true;
         this.lastTime = performance.now();
         this.startGameLoop();
 
@@ -451,54 +387,37 @@ class RavanaGame {
 
         this.audioManager.playMusic('battle');
 
-        // ========================================
-        // MOBILE CONTROLS - Show if on mobile
-        // ========================================
-        if (this.mobileControls && this.mobileControls.isMobile) {
-            console.log('📱 Showing mobile controls...');
+        this.isPlaying = true;
+
+        // Show mobile controls if on mobile
+        if (this.mobileControls.isMobile) {
             this.mobileControls.show();
-        } else if (this.isMobileDevice) {
-            console.log('📱 Mobile device detected but controls not initialized, trying again...');
-            this.initMobileControls();
-            if (this.mobileControls && this.mobileControls.isMobile) {
-                this.mobileControls.show();
-            }
         }
     }
 
-    // ============================================
-    // Mobile Callback Methods
-    // ============================================
+    // Mobile callback methods
     onMobileFire(isFiring) {
-        if (!this.player) return;
-
         this.player.isShooting = isFiring;
-        if (isFiring && this.player.canShoot()) {
-            const bullet = this.player.shoot(this.mouse.x, this.mouse.y);
-            if (bullet) {
-                this.bullets.push(bullet);
-                this.stats.shotsFired++;
-                this.audioManager.play('shoot');
-            }
+        if (isFiring) {
+            this.player.shoot();
         }
     }
 
     onMobileReload() {
-        if (this.player) {
-            this.player.reload();
-            this.audioManager.play('reload');
-        }
+        this.player.reload();
     }
 
     onMobileSpecial() {
-        this.useSpecialAbility();
+        if (this.player.specialReady) {
+            this.player.useSpecialAttack();
+        }
     }
 
     togglePause() {
-        if (this.gameState === 'paused') {
-            this.resumeGame();
-        } else if (this.gameState === 'playing') {
-            this.pauseGame();
+        if (this.isPaused) {
+            this.resume();
+        } else {
+            this.pause();
         }
     }
 
@@ -565,17 +484,18 @@ class RavanaGame {
     }
 
     clearWaveTimers() {
-        if (this.waveSpawnTimer) {
-            clearTimeout(this.waveSpawnTimer);
-            this.waveSpawnTimer = null;
-        }
         if (this.waveSpawnTimeout) {
             clearTimeout(this.waveSpawnTimeout);
             this.waveSpawnTimeout = null;
         }
+        if (this.waveSpawnTimer) {
+            clearTimeout(this.waveSpawnTimer);
+            this.waveSpawnTimer = null;
+        }
         this.isSpawningWave = false;
         this.pendingEnemies = 0;
     }
+
 
     scheduleWaveSpawn() {
         this.clearWaveTimers();
@@ -589,21 +509,31 @@ class RavanaGame {
 
     spawnWave() {
         // Safety checks
-        if (this.gameState !== 'playing') return;
-        if (this.waveActive) return; // Don't spawn if already spawning
+        if (this.gameState !== 'playing') {
+            console.log('Cannot spawn wave - not playing');
+            return;
+        }
+
+        if (this.waveActive) {
+            console.log('Wave already active');
+            return;
+        }
 
         const levelData = LEVELS[this.currentLevel - 1];
-        if (!levelData) return;
+        if (!levelData) {
+            console.error('Level data not found!');
+            return;
+        }
 
         const waveData = levelData.waves[this.wave - 1];
 
         if (!waveData) {
-            // No more waves - level complete
+            console.log('No more waves - level complete');
             this.levelComplete();
             return;
         }
 
-        console.log(`Starting Wave ${this.wave}/${this.totalWaves}`);
+        console.log(`=== Starting Wave ${this.wave}/${this.totalWaves} ===`);
 
         // Mark wave as active
         this.waveActive = true;
@@ -617,7 +547,7 @@ class RavanaGame {
             this.totalEnemiesInWave += enemyConfig.count;
         });
 
-        console.log(`Wave ${this.wave}: Spawning ${this.totalEnemiesInWave} enemies`);
+        console.log(`Spawning ${this.totalEnemiesInWave} enemies`);
 
         // Update wave display
         const waveTextEl = document.getElementById('wave-text');
@@ -635,20 +565,18 @@ class RavanaGame {
                 const currentDelay = spawnDelay;
 
                 setTimeout(() => {
+                    // IMPORTANT: Check game state before spawning
                     if (this.gameState === 'playing' && this.waveActive) {
                         this.spawnEnemy(enemyConfig.type);
                         this.enemiesSpawnedThisWave++;
-
-                        // Check if all enemies spawned
-                        if (this.enemiesSpawnedThisWave >= this.totalEnemiesInWave) {
-                            console.log(`All ${this.totalEnemiesInWave} enemies spawned for wave ${this.wave}`);
-                        }
+                        console.log(`Spawned enemy ${this.enemiesSpawnedThisWave}/${this.totalEnemiesInWave}`);
                     }
                 }, currentDelay);
 
                 spawnDelay += delayBetweenEnemies;
             }
         });
+
         this.audioManager.play('waveStart');
     }
 
@@ -693,16 +621,28 @@ class RavanaGame {
     // Game Loop Control
     // ============================================
     startGameLoop() {
-        if (this.isRunning) return;
+        // Don't start if already running
+        if (this.isRunning) {
+            console.log('Game loop already running');
+            return;
+        }
 
-        this.log('Starting game loop');
+        // Don't start if not in playing state
+        if (this.gameState !== 'playing') {
+            console.log('Cannot start loop - state:', this.gameState);
+            return;
+        }
+
+        console.log('Starting game loop...');
         this.isRunning = true;
         this.lastTime = performance.now();
+
+        // Start the loop
         this.gameLoop();
     }
 
     stopGameLoop() {
-        this.log('Stopping game loop');
+        console.log('Stopping game loop...');
         this.isRunning = false;
 
         if (this.animFrameId) {
@@ -711,28 +651,129 @@ class RavanaGame {
         }
     }
 
-    pauseGame() {
-        if (this.gameState !== 'playing') return;
 
-        this.log('Game paused');
+    pauseGame() {
+        if (this.gameState !== 'playing') {
+            console.log('Cannot pause - current state:', this.gameState);
+            return;
+        }
+
+        console.log('Pausing game...');
+
+        // Save wave timeout state (don't clear it, just track)
+        this.pausedTime = performance.now();
+
+        // Stop loop
+        this.isRunning = false;
+
+        if (this.animFrameId) {
+            cancelAnimationFrame(this.animFrameId);
+            this.animFrameId = null;
+        }
+
+        // Change state
         this.gameState = 'paused';
-        this.stopGameLoop();
+
+        // Show pause menu
         this.showOverlay('pause-menu');
+
+        console.log('Game paused - waveActive:', this.waveActive, 'enemies:', this.enemies.length);
     }
 
     resumeGame() {
-        if (this.gameState !== 'paused') return;
+        if (this.gameState !== 'paused') {
+            console.log('Cannot resume - current state:', this.gameState);
+            return;
+        }
 
-        this.log('Game resumed');
+        console.log('Resuming game...');
+        console.log('Wave state - waveActive:', this.waveActive, 'wave:', this.wave, 'enemies:', this.enemies.length);
+
+        // Hide pause menu
         this.hideOverlay('pause-menu');
+
+        // Reset input states
+        this.keys = {};
+        this.mouse.down = false;
+
+        // Change state
         this.gameState = 'playing';
+
+        // Reset timing
         this.lastTime = performance.now();
+
+        // Start the loop
+        this.isRunning = false;
         this.startGameLoop();
+
+        // CHECK: If no enemies and wave not active, spawn next wave
+        this.checkAndSpawnWave();
+
+        console.log('Game resumed');
+    }
+
+    checkAndSpawnWave() {
+        console.log('Checking wave status...');
+        console.log('- enemies:', this.enemies.length);
+        console.log('- waveActive:', this.waveActive);
+        console.log('- waveStarted:', this.waveStarted);
+        console.log('- enemiesSpawnedThisWave:', this.enemiesSpawnedThisWave);
+        console.log('- totalEnemiesInWave:', this.totalEnemiesInWave);
+
+        // If wave is supposed to be active but no enemies, something went wrong
+        if (this.waveActive && this.enemies.length === 0 && this.enemiesSpawnedThisWave >= this.totalEnemiesInWave) {
+            // Wave was completed during pause transition
+            console.log('Wave completed, moving to next wave');
+            this.waveActive = false;
+            this.wave++;
+
+            if (this.wave <= this.totalWaves) {
+                this.scheduleNextWave();
+            } else {
+                this.levelComplete();
+            }
+            return;
+        }
+
+        // If no wave is active and no pending timeout, start wave
+        if (!this.waveActive && this.enemies.length === 0) {
+            console.log('No active wave, scheduling wave spawn');
+            this.scheduleNextWave();
+        }
+    }
+
+    scheduleNextWave() {
+        // Clear any existing timeout
+        if (this.waveSpawnTimeout) {
+            clearTimeout(this.waveSpawnTimeout);
+            this.waveSpawnTimeout = null;
+        }
+
+        console.log('Scheduling wave', this.wave);
+
+        this.waveSpawnTimeout = setTimeout(() => {
+            if (this.gameState === 'playing') {
+                this.spawnWave();
+            }
+        }, 1000);
     }
 
     restartLevel() {
-        this.log('Restarting level');
+        console.log('Restarting level...');
+
+        // Stop current game loop
+        this.stopGameLoop();
+
+        // Clear wave timers
+        this.clearWaveTimers();
+
+        // Hide all overlays
         this.hideAllOverlays();
+
+        // Reset game state before starting
+        this.gameState = 'menu'; // Temporarily set to menu
+
+        // Start fresh
         this.startGame(this.currentLevel);
     }
 
@@ -747,18 +788,52 @@ class RavanaGame {
         }
     }
 
+    // quitToMenu() {
+    //     console.log('Quitting to menu');
+
+    //     // Stop game loop first
+    //     this.gameState = 'menu';
+    //     this.isRunning = false;
+
+    //     if (this.animFrameId) {
+    //         cancelAnimationFrame(this.animFrameId);
+    //         this.animFrameId = null;
+    //     }
+
+    //     // Clear wave timeout
+    //     if (this.waveSpawnTimeout) {
+    //         clearTimeout(this.waveSpawnTimeout);
+    //         this.waveSpawnTimeout = null;
+    //     }
+
+    //     // Reset wave state
+    //     this.waveActive = false;
+    //     this.waveStarted = false;
+    //     this.enemiesSpawnedThisWave = 0;
+    //     this.totalEnemiesInWave = 0;
+
+    //     // Clear all objects
+    //     this.enemies = [];
+    //     this.bullets = [];
+    //     this.enemyBullets = [];
+    //     this.powerups = [];
+    //     this.particles = [];
+    //     this.player = null;
+
+    //     this.hideAllOverlays();
+    //     this.showScreen('main-menu');
+    //     this.audioManager.playMusic('menu');
+    // }
     quitToMenu() {
-        console.log('Quitting to menu');
+        console.log('Quitting to menu...');
 
         // Stop game loop first
+        this.stopGameLoop();
+
+        // Set state
         this.gameState = 'menu';
         this.isRunning = false;
         this.isPlaying = false;
-
-        if (this.animFrameId) {
-            cancelAnimationFrame(this.animFrameId);
-            this.animFrameId = null;
-        }
 
         // Clear wave timeout
         this.clearWaveTimers();
@@ -777,14 +852,25 @@ class RavanaGame {
         this.particles = [];
         this.player = null;
 
+        // Reset input
+        this.keys = {};
+        this.mouse.down = false;
+
+        // Hide overlays and show menu
+        this.hideAllOverlays();
+        this.showScreen('main-menu');
+
         // Hide mobile controls
         if (this.mobileControls && this.mobileControls.isMobile) {
             this.mobileControls.hide();
         }
 
-        this.hideAllOverlays();
-        this.showScreen('main-menu');
-        this.audioManager.playMusic('menu');
+        // Play menu music
+        if (this.audioManager) {
+            this.audioManager.playMusic('menu');
+        }
+
+        console.log('Returned to menu successfully');
     }
 
     levelComplete() {
@@ -794,18 +880,15 @@ class RavanaGame {
 
         this.gameState = 'levelComplete';
         this.isRunning = false;
-        this.isPlaying = false;
 
         if (this.animFrameId) {
             cancelAnimationFrame(this.animFrameId);
             this.animFrameId = null;
         }
 
-        this.clearWaveTimers();
-
-        // Hide mobile controls
-        if (this.mobileControls && this.mobileControls.isMobile) {
-            this.mobileControls.hide();
+        if (this.waveSpawnTimeout) {
+            clearTimeout(this.waveSpawnTimeout);
+            this.waveSpawnTimeout = null;
         }
 
         // Calculate stats
@@ -839,18 +922,15 @@ class RavanaGame {
 
         this.gameState = 'gameOver';
         this.isRunning = false;
-        this.isPlaying = false;
 
         if (this.animFrameId) {
             cancelAnimationFrame(this.animFrameId);
             this.animFrameId = null;
         }
 
-        this.clearWaveTimers();
-
-        // Hide mobile controls
-        if (this.mobileControls && this.mobileControls.isMobile) {
-            this.mobileControls.hide();
+        if (this.waveSpawnTimeout) {
+            clearTimeout(this.waveSpawnTimeout);
+            this.waveSpawnTimeout = null;
         }
 
         const goScoreEl = document.getElementById('gameover-score');
@@ -886,8 +966,9 @@ class RavanaGame {
     // Main Game Loop
     // ============================================
     gameLoop() {
-        // Safety check - stop if not playing
-        if (this.gameState !== 'playing' || !this.isRunning) {
+        // Safety check
+        if (!this.isRunning || this.gameState !== 'playing') {
+            console.log('Loop stopped - isRunning:', this.isRunning, 'state:', this.gameState);
             this.isRunning = false;
             return;
         }
@@ -895,7 +976,7 @@ class RavanaGame {
         const currentTime = performance.now();
         const rawDelta = (currentTime - this.lastTime) / 1000;
 
-        // Cap delta time to prevent huge jumps (max 100ms)
+        // Cap delta time (max 100ms)
         const deltaTime = Math.min(rawDelta, 0.1);
         this.lastTime = currentTime;
 
@@ -929,20 +1010,42 @@ class RavanaGame {
             dt = 0.016;
         }
 
-        // ========================================
-        // MOBILE INPUT HANDLING
-        // ========================================
-        if (this.mobileControls && this.mobileControls.isMobile && this.mobileControls.isEnabled) {
-            this.handleMobileInput(dt);
+        // Handle mobile input
+        if (this.mobileControls.isMobile && this.mobileControls.isEnabled) {
+            const movement = this.mobileControls.getMovement();
+            const aim = this.mobileControls.getAimPosition();
+
+            // Apply movement
+            if (movement.distance > 0.1) {
+                this.player.velocityX = movement.x * this.player.speed;
+                this.player.velocityY = movement.y * this.player.speed;
+            } else {
+                this.player.velocityX = 0;
+                this.player.velocityY = 0;
+            }
+
+            // Apply aim
+            if (aim.active) {
+                this.player.aimX = aim.x;
+                this.player.aimY = aim.y;
+            }
+
+            // Handle continuous fire
+            if (this.mobileControls.isFirePressed()) {
+                this.player.shoot();
+            }
+
+            // Update special button state
+            this.mobileControls.updateSpecialReady(this.player.specialReady);
         }
 
         // Update player
         if (this.player) {
             this.player.update(dt, this.keys, this.mouse);
 
-            // Desktop shooting (mouse)
-            if (!this.mobileControls?.isMobile && this.mouse.down && this.player.canShoot()) {
-                if (this.bullets.length < GAME_CONFIG.MAX_BULLETS) {
+            // Shooting
+            if (this.mouse.down && this.player.canShoot()) {
+                if (this.bullets.length < 80) {
                     const bullet = this.player.shoot(this.mouse.x, this.mouse.y);
                     if (bullet) {
                         this.bullets.push(bullet);
@@ -1022,53 +1125,27 @@ class RavanaGame {
         }
 
         // Enforce particle limit
-        while (this.particles.length > GAME_CONFIG.MAX_PARTICLES) {
+        while (this.particles.length > 60) {
             this.particles.shift();
         }
 
         // Check collisions
         this.checkCollisions();
 
-        // Check wave completion
+        // Check wave completion - IMPORTANT: This is the key fix
         this.checkWaveCompletion();
 
         // Update HUD
         this.updateHUD();
     }
 
-    // ============================================
-    // Mobile Input Handler
-    // ============================================
-    handleMobileInput(dt) {
-        if (!this.player || !this.mobileControls) return;
+    updatePlayer(dt) {
+        if (!this.player) return;
 
-        const movement = this.mobileControls.getMovement();
-        const aim = this.mobileControls.getAimPosition();
+        this.player.update(dt, this.keys, this.mouse);
 
-        // Apply joystick movement
-        if (movement.distance > 0.1) {
-            // Calculate velocity based on joystick
-            const speed = this.player.speed || 200;
-            this.player.velocityX = movement.x * speed;
-            this.player.velocityY = movement.y * speed;
-
-            // Apply movement
-            this.player.x += this.player.velocityX * dt;
-            this.player.y += this.player.velocityY * dt;
-
-            // Keep player in bounds
-            this.player.x = Math.max(this.player.radius, Math.min(this.canvas.width - this.player.radius, this.player.x));
-            this.player.y = Math.max(this.player.radius, Math.min(this.canvas.height - this.player.radius, this.player.y));
-        }
-
-        // Apply aim position to mouse (for shooting direction)
-        if (aim.active) {
-            this.mouse.x = aim.x;
-            this.mouse.y = aim.y;
-        }
-
-        // Handle continuous fire from mobile
-        if (this.mobileControls.isFirePressed() && this.player.canShoot()) {
+        // Shooting
+        if (this.mouse.down && this.player.canShoot()) {
             if (this.bullets.length < GAME_CONFIG.MAX_BULLETS) {
                 const bullet = this.player.shoot(this.mouse.x, this.mouse.y);
                 if (bullet) {
@@ -1079,9 +1156,110 @@ class RavanaGame {
             }
         }
 
-        // Update special button visual state
-        if (this.mobileControls.updateSpecialReady) {
-            this.mobileControls.updateSpecialReady(this.player.specialCharge >= 100);
+        // Charge special ability
+        this.player.chargeSpecial(GAME_CONFIG.SPECIAL_CHARGE_RATE * dt);
+    }
+
+    updateBullets(dt) {
+        // Update player bullets
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            const bullet = this.bullets[i];
+
+            if (!bullet) {
+                this.bullets.splice(i, 1);
+                continue;
+            }
+
+            bullet.update(dt);
+
+            if (!bullet.isActive || !this.isInBounds(bullet)) {
+                this.bullets.splice(i, 1);
+            }
+        }
+
+        // Update enemy bullets
+        for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
+            const bullet = this.enemyBullets[i];
+
+            if (!bullet) {
+                this.enemyBullets.splice(i, 1);
+                continue;
+            }
+
+            bullet.update(dt);
+
+            if (!bullet.isActive || !this.isInBounds(bullet)) {
+                this.enemyBullets.splice(i, 1);
+            }
+        }
+
+        // Enforce bullet limits
+        while (this.bullets.length > GAME_CONFIG.MAX_BULLETS) {
+            this.bullets.shift();
+        }
+        while (this.enemyBullets.length > GAME_CONFIG.MAX_ENEMY_BULLETS) {
+            this.enemyBullets.shift();
+        }
+    }
+
+    updateEnemies(dt) {
+        for (let i = this.enemies.length - 1; i >= 0; i--) {
+            const enemy = this.enemies[i];
+
+            if (!enemy) {
+                this.enemies.splice(i, 1);
+                continue;
+            }
+
+            enemy.update(dt, this.player);
+
+            if (!enemy.isAlive) {
+                this.enemies.splice(i, 1);
+            }
+        }
+    }
+
+    updatePowerups(dt) {
+        for (let i = this.powerups.length - 1; i >= 0; i--) {
+            const powerup = this.powerups[i];
+
+            if (!powerup) {
+                this.powerups.splice(i, 1);
+                continue;
+            }
+
+            powerup.update(dt);
+
+            if (!powerup.isActive) {
+                this.powerups.splice(i, 1);
+            }
+        }
+
+        // Limit powerups
+        while (this.powerups.length > GAME_CONFIG.MAX_POWERUPS) {
+            this.powerups.shift();
+        }
+    }
+
+    updateParticles(dt) {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const particle = this.particles[i];
+
+            if (!particle) {
+                this.particles.splice(i, 1);
+                continue;
+            }
+
+            particle.update(dt);
+
+            if (particle.alpha <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+
+        // Limit particles
+        while (this.particles.length > GAME_CONFIG.MAX_PARTICLES) {
+            this.particles.shift();
         }
     }
 
@@ -1089,19 +1267,17 @@ class RavanaGame {
         // Don't check if not playing
         if (this.gameState !== 'playing') return;
 
-        // Don't check if wave hasn't started yet
+        // Don't check if wave hasn't started
         if (!this.waveStarted) return;
 
-        // Don't check if still spawning enemies
+        // Don't check if still spawning
         if (this.enemiesSpawnedThisWave < this.totalEnemiesInWave) return;
 
         // Check if all enemies are dead
         if (this.enemies.length === 0 && this.waveActive) {
-            console.log(`Wave ${this.wave} complete!`);
+            console.log(`=== Wave ${this.wave} complete! ===`);
 
             this.waveActive = false;
-
-            // Move to next wave
             this.wave++;
 
             if (this.wave <= this.totalWaves) {
@@ -1113,19 +1289,15 @@ class RavanaGame {
                 this.enemiesKilledThisWave = 0;
                 this.totalEnemiesInWave = 0;
 
-                // Spawn next wave after delay
-                this.waveSpawnTimeout = setTimeout(() => {
-                    if (this.gameState === 'playing') {
-                        this.spawnWave();
-                    }
-                }, 2000);
+                // Schedule next wave
+                this.scheduleNextWave();
             } else {
-                // All waves complete
-                console.log('All waves complete! Level finished!');
+                console.log('All waves complete!');
                 this.levelComplete();
             }
         }
     }
+
 
     // ============================================
     // Collision Detection
@@ -1427,68 +1599,34 @@ class RavanaGame {
         if (this.player) {
             this.player.render(ctx, this.mouse);
         }
-
-        // Draw mobile crosshair if aiming
-        if (this.mobileControls?.isMobile && this.mobileControls?.isEnabled) {
-            this.drawMobileCrosshair();
-        }
-    }
-
-    drawMobileCrosshair() {
-        const aim = this.mobileControls.getAimPosition();
-        if (!aim.active) return;
-
-        const ctx = this.ctx;
-        ctx.save();
-
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-        ctx.lineWidth = 2;
-
-        // Draw crosshair
-        const size = 20;
-        ctx.beginPath();
-        ctx.moveTo(aim.x - size, aim.y);
-        ctx.lineTo(aim.x + size, aim.y);
-        ctx.moveTo(aim.x, aim.y - size);
-        ctx.lineTo(aim.x, aim.y + size);
-        ctx.stroke();
-
-        // Draw center dot
-        ctx.fillStyle = 'red';
-        ctx.beginPath();
-        ctx.arc(aim.x, aim.y, 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
     }
 
     renderDebugInfo() {
-        const ctx = this.ctx;
+        // const ctx = this.ctx;
 
-        ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(10, this.canvas.height - 140, 220, 130);
+        // ctx.save();
+        // ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        // ctx.fillRect(10, this.canvas.height - 120, 200, 110);
 
-        ctx.fillStyle = '#00ff00';
-        ctx.font = '12px monospace';
+        // ctx.fillStyle = '#00ff00';
+        // ctx.font = '12px monospace';
 
-        const debugLines = [
-            `FPS: ${this.fps}`,
-            `State: ${this.gameState}`,
-            `Mobile: ${this.mobileControls?.isMobile ? 'YES' : 'NO'}`,
-            `Controls Active: ${this.mobileControls?.isEnabled ? 'YES' : 'NO'}`,
-            `Enemies: ${this.enemies.length}/${GAME_CONFIG.MAX_ENEMIES}`,
-            `Bullets: ${this.bullets.length}/${GAME_CONFIG.MAX_BULLETS}`,
-            `Particles: ${this.particles.length}/${GAME_CONFIG.MAX_PARTICLES}`,
-            `Wave: ${this.wave}/${this.totalWaves}`,
-            `Wave Active: ${this.waveActive}`
-        ];
+        // const debugLines = [
+        //     `FPS: ${this.fps}`,
+        //     `State: ${this.gameState}`,
+        //     `Enemies: ${this.enemies.length}/${GAME_CONFIG.MAX_ENEMIES}`,
+        //     `Bullets: ${this.bullets.length}/${GAME_CONFIG.MAX_BULLETS}`,
+        //     `E.Bullets: ${this.enemyBullets.length}/${GAME_CONFIG.MAX_ENEMY_BULLETS}`,
+        //     `Particles: ${this.particles.length}/${GAME_CONFIG.MAX_PARTICLES}`,
+        //     `Wave: ${this.wave}/${this.totalWaves}`,
+        //     `Pending: ${this.pendingEnemies}`
+        // ];
 
-        debugLines.forEach((line, index) => {
-            ctx.fillText(line, 20, this.canvas.height - 120 + index * 13);
-        });
+        // debugLines.forEach((line, index) => {
+        //     //ctx.fillText(line, 20, this.canvas.height - 100 + index * 13);
+        // });
 
-        ctx.restore();
+        // ctx.restore();
     }
 
     getLevelBackground() {
@@ -1964,7 +2102,7 @@ class RavanaGame {
     returnToMenu() {
         this.isPlaying = false;
 
-        if (this.mobileControls && this.mobileControls.isMobile) {
+        if (this.mobileControls.isMobile) {
             this.mobileControls.hide();
         }
     }
