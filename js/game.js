@@ -86,6 +86,9 @@ class RavanaGame {
         this.enemiesSpawnedThisWave = 0;
         this.enemiesKilledThisWave = 0;
         this.totalEnemiesInWave = 0;
+        this.wavePendingOnResume = false;
+        this.enemySpawnTimeouts = [];
+        this.remainingEnemiesToSpawn = 0;
 
         // Debug info
         this.debugMode = true;
@@ -541,6 +544,9 @@ class RavanaGame {
         this.enemiesSpawnedThisWave = 0;
         this.enemiesKilledThisWave = 0;
 
+        // Clear any existing spawn timeouts
+        this.clearEnemySpawnTimeouts(); // ADD THIS
+
         // Calculate total enemies in this wave
         this.totalEnemiesInWave = 0;
         waveData.enemies.forEach(enemyConfig => {
@@ -564,8 +570,8 @@ class RavanaGame {
             for (let i = 0; i < enemyConfig.count; i++) {
                 const currentDelay = spawnDelay;
 
-                setTimeout(() => {
-                    // IMPORTANT: Check game state before spawning
+                // FIXED: Store timeout ID
+                const timeoutId = setTimeout(() => {
                     if (this.gameState === 'playing' && this.waveActive) {
                         this.spawnEnemy(enemyConfig.type);
                         this.enemiesSpawnedThisWave++;
@@ -573,11 +579,21 @@ class RavanaGame {
                     }
                 }, currentDelay);
 
+                this.enemySpawnTimeouts.push(timeoutId); // ADD THIS
+
                 spawnDelay += delayBetweenEnemies;
             }
         });
 
         this.audioManager.play('waveStart');
+    }
+
+    clearEnemySpawnTimeouts() {
+        if (this.enemySpawnTimeouts && this.enemySpawnTimeouts.length > 0) {
+            console.log('Clearing', this.enemySpawnTimeouts.length, 'spawn timeouts');
+            this.enemySpawnTimeouts.forEach(id => clearTimeout(id));
+            this.enemySpawnTimeouts = [];
+        }
     }
 
     spawnEnemy(type) {
@@ -660,8 +676,18 @@ class RavanaGame {
 
         console.log('Pausing game...');
 
-        // Save wave timeout state (don't clear it, just track)
-        this.pausedTime = performance.now();
+        // Store remaining enemies to spawn
+        this.remainingEnemiesToSpawn = this.totalEnemiesInWave - this.enemiesSpawnedThisWave;
+        console.log('Remaining enemies to spawn:', this.remainingEnemiesToSpawn);
+
+        // Clear ALL pending timeouts
+        if (this.waveSpawnTimeout) {
+            clearTimeout(this.waveSpawnTimeout);
+            this.waveSpawnTimeout = null;
+        }
+
+        // Clear enemy spawn timeouts
+        this.clearEnemySpawnTimeouts();
 
         // Stop loop
         this.isRunning = false;
@@ -677,7 +703,7 @@ class RavanaGame {
         // Show pause menu
         this.showOverlay('pause-menu');
 
-        console.log('Game paused - waveActive:', this.waveActive, 'enemies:', this.enemies.length);
+        console.log('Game paused - wave:', this.wave, 'waveActive:', this.waveActive, 'enemies:', this.enemies.length);
     }
 
     resumeGame() {
@@ -687,7 +713,6 @@ class RavanaGame {
         }
 
         console.log('Resuming game...');
-        console.log('Wave state - waveActive:', this.waveActive, 'wave:', this.wave, 'enemies:', this.enemies.length);
 
         // Hide pause menu
         this.hideOverlay('pause-menu');
@@ -696,7 +721,7 @@ class RavanaGame {
         this.keys = {};
         this.mouse.down = false;
 
-        // Change state
+        // Change state FIRST
         this.gameState = 'playing';
 
         // Reset timing
@@ -706,11 +731,59 @@ class RavanaGame {
         this.isRunning = false;
         this.startGameLoop();
 
-        // CHECK: If no enemies and wave not active, spawn next wave
-        this.checkAndSpawnWave();
+        // FIXED: Spawn remaining enemies if wave was in progress
+        if (this.waveActive && this.remainingEnemiesToSpawn > 0) {
+            console.log('Resuming enemy spawns:', this.remainingEnemiesToSpawn, 'remaining');
+            this.spawnRemainingEnemies();
+        }
+        // If wave completed during pause, start next wave
+        else if (!this.waveActive || (this.enemies.length === 0 && this.enemiesSpawnedThisWave >= this.totalEnemiesInWave)) {
+            console.log('Checking for next wave...');
+            setTimeout(() => {
+                if (this.gameState === 'playing' && this.enemies.length === 0) {
+                    this.waveActive = false;
+                    this.checkWaveCompletion();
+                }
+            }, 100);
+        }
 
         console.log('Game resumed');
     }
+
+    spawnRemainingEnemies() {
+        const levelData = LEVELS[this.currentLevel - 1];
+        if (!levelData) return;
+
+        const waveData = levelData.waves[this.wave - 1];
+        if (!waveData) return;
+
+        let spawnDelay = 0;
+        let enemiesToSpawn = this.remainingEnemiesToSpawn;
+
+        // Find enemy type from wave data
+        const enemyType = waveData.enemies[0]?.type || 'yaka';
+        const delayBetweenEnemies = waveData.enemies[0]?.delay || 500;
+
+        console.log(`Spawning ${enemiesToSpawn} remaining enemies of type ${enemyType}`);
+
+        for (let i = 0; i < enemiesToSpawn; i++) {
+            const currentDelay = spawnDelay;
+
+            const timeoutId = setTimeout(() => {
+                if (this.gameState === 'playing' && this.waveActive) {
+                    this.spawnEnemy(enemyType);
+                    this.enemiesSpawnedThisWave++;
+                    console.log(`Spawned remaining enemy ${this.enemiesSpawnedThisWave}/${this.totalEnemiesInWave}`);
+                }
+            }, currentDelay);
+
+            this.enemySpawnTimeouts.push(timeoutId);
+            spawnDelay += delayBetweenEnemies;
+        }
+
+        this.remainingEnemiesToSpawn = 0;
+    }
+
 
     checkAndSpawnWave() {
         console.log('Checking wave status...');
